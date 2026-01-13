@@ -9,7 +9,7 @@ import {LibPositionManager} from "./libraries/LibPositionManager.sol";
 import {LibProtocol} from "./libraries/LibProtocol.sol";
 import {LibPriceOracle} from "./libraries/LibPriceOracle.sol";
 
-import {Loan} from "./models/Protocol.sol";
+import {Loan, RepayRequest} from "./models/Protocol.sol";
 import {ONLY_SECURITY_COUNCIL} from "./models/Error.sol";
 
 contract LendbitSpoke is Ownable2Step {
@@ -34,9 +34,9 @@ contract LendbitSpoke is Ownable2Step {
         return LibLendbitSpoke._takeLoan(s, _token, _principal, _tenureSeconds);
     }
 
-    function repayLoan(uint256 _loanId, uint256 _amount) external view {
-        // LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
-        // LibLendbitSpoke._repayLoan(s, _loanId, _amount);
+    function repayLoan(RepayRequest calldata _request, bytes calldata _signature) external returns (uint256) {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        return LibLendbitSpoke._repayLoan(s, _request, _signature);
     }
 
     function liquidateLoan(uint256 _loanId, uint256 _amount, address _collateralToken) external {
@@ -99,7 +99,7 @@ contract LendbitSpoke is Ownable2Step {
         return LibProtocol._getPositionCollateralValue(s, _positionId);
     }
 
-    function getPositionBorrowableCollateralValue(uint256 _positionId) external returns (uint256) {
+    function getPositionBorrowableCollateralValue(uint256 _positionId) external view returns (uint256) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return LibLendbitSpoke._getPositionBorrowableCollateralValue(s, _positionId);
     }
@@ -147,6 +147,16 @@ contract LendbitSpoke is Ownable2Step {
     function getActiveLoanIds() external view returns (uint256[] memory) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return LibProtocol._getActiveLoanIds(s);
+    }
+
+    function setRequestSigner(address _signer) external onlySecurityCouncil {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        s.s_requestSigner = _signer;
+    }
+
+    function getRequestSigner() external view returns (address) {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        return s.s_requestSigner;
     }
 
     function getLoanDetails(uint256 _loanId)
