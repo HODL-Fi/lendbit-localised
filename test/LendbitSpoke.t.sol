@@ -35,6 +35,7 @@ contract LendbitSpokeTest is Base {
         _setupInitialCollateralTokens();
         lendbitSpoke.setInterestRate(2000, 500);
         lendbitSpoke.addSupportedToken(_token4, _pricefeed4);
+        lendbitSpoke.setRequestSigner(requestSignerAddress);
     }
 
     // =============================================================
@@ -668,6 +669,140 @@ contract LendbitSpokeTest is Base {
         vm.stopPrank();
     }
 
+    function testRepayLoanSuccess() public {
+        // createVaultAndFund(1000000e18);
+        uint256 collateralAmount = 10000 * 1e18;
+        uint256 borrowAmount = 1000 * 1e6;
+
+        depositCollateralFor(user1, address(token1), collateralAmount);
+
+        vm.startPrank(user1);
+        uint256 _loanId = lendbitSpoke.takeLoan(address(token4), borrowAmount, 365 days);
+
+        vm.warp(block.timestamp + (365 days / 2)); // Warp half the tenure to accrue some interest
+
+        uint256 _debtBeforeRepay = lendbitSpoke.getOutstandingDebtForLoan(_loanId);
+
+        uint256 remainingDebt = executeRepayLoan(_loanId, _debtBeforeRepay);
+
+        assertEq(remainingDebt, 0, "Debt should be zero after full repayment");
+        assertEq(lendbitSpoke.getOutstandingDebtForLoan(_loanId), 0, "Outstanding debt should be cleared");
+
+        (,,, uint256 repaid,,,,,, uint8 status) = lendbitSpoke.getLoanDetails(_loanId);
+        assertEq(repaid, _debtBeforeRepay, "Repayment amount should match outstanding debt");
+        assertEq(status, uint8(LoanStatus.REPAID), "Loan should be marked repaid");
+        vm.stopPrank();
+    }
+
+    function testRepayLoanPartial() public {
+        // createVaultAndFund(1000000e18);
+        uint256 collateralAmount = 10000 * 1e18;
+        uint256 borrowAmount = 1000 * 1e6;
+
+        depositCollateralFor(user1, address(token1), collateralAmount);
+
+        vm.startPrank(user1);
+        uint256 _loanId = lendbitSpoke.takeLoan(address(token4), borrowAmount, 30 days);
+        vm.warp(block.timestamp + 15 days); // Warp half the tenure to accrue some interest
+
+        uint256 partialRepay = borrowAmount;
+        uint256 remainingDebt = executeRepayLoan(_loanId, partialRepay);
+
+        assertGt(remainingDebt, 0, "Debt should remain after partial repayment");
+        assertLt(remainingDebt, borrowAmount, "Debt should be less than initial borrow");
+
+        (,,, uint256 repaid,,,,,, uint8 status) = lendbitSpoke.getLoanDetails(_loanId);
+        assertEq(repaid, partialRepay, "Partial repayment should be tracked");
+        assertEq(status, uint8(LoanStatus.FULFILLED), "Loan should remain active after partial repay");
+        vm.stopPrank();
+    }
+
+    function testRepayLoanFailsForInvalidSignature() public {
+        // createVaultAndFund(1000000e18);
+        uint256 collateralAmount = 10000 * 1e18;
+        uint256 borrowAmount = 1000 * 1e6;
+
+        depositCollateralFor(user1, address(token1), collateralAmount);
+
+        vm.startPrank(user1);
+        uint256 _loanId = lendbitSpoke.takeLoan(address(token4), borrowAmount, 30 days);
+
+        RepayRequest memory request = createRepayRequest(_loanId, borrowAmount);
+        uint256 invalidKey = REQUEST_SIGNER_PRIVATE_KEY + 1;
+        address invalidSigner = vm.addr(invalidKey);
+        bytes memory invalidSignature = signRepayRequestWithKey(request, invalidKey);
+
+        vm.expectRevert(abi.encodeWithSelector(REQUEST_INVALID_SIGNATURE.selector, invalidSigner));
+        lendbitSpoke.repayLoan(request, invalidSignature);
+        vm.stopPrank();
+    }
+
+    function testRepayLoanFailsForTargetChainMismatch() public {
+        // createVaultAndFund(1000000e18);
+        uint256 collateralAmount = 10000 * 1e18;
+        uint256 borrowAmount = 1000 * 1e6;
+
+        depositCollateralFor(user1, address(token1), collateralAmount);
+
+        vm.startPrank(user1);
+        uint256 _loanId = lendbitSpoke.takeLoan(address(token4), borrowAmount, 365 days);
+
+        RepayRequest memory request = createRepayRequest(_loanId, borrowAmount);
+        request.targetChainId = block.chainid + 1;
+        bytes memory signature = signRepayRequestWithKey(request, REQUEST_SIGNER_PRIVATE_KEY);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(REQUEST_REPAY_TARGET_CHAIN_MISMATCH.selector, block.chainid, request.targetChainId)
+        );
+        lendbitSpoke.repayLoan(request, signature);
+        vm.stopPrank();
+    }
+
+    function testRepayLoanMoreThanDebt() public {
+        // createVaultAndFund(1000000e18);
+        uint256 collateralAmount = 10000 * 1e18;
+        uint256 borrowAmount = 1000 * 1e6;
+
+        depositCollateralFor(user1, address(token1), collateralAmount);
+
+        vm.startPrank(user1);
+        uint256 _loanId = lendbitSpoke.takeLoan(address(token4), borrowAmount, 365 days);
+
+        vm.warp(block.timestamp + 30 days); // Warp to accrue some interest
+
+        uint256 debtBeforeRepay = lendbitSpoke.getOutstandingDebtForLoan(_loanId);
+        uint256 remainingDebt = executeRepayLoan(_loanId, borrowAmount * 2);
+
+        assertEq(remainingDebt, 0, "Debt should be zero after over-repayment");
+
+        (,,, uint256 repaid,,,,,, uint8 status) = lendbitSpoke.getLoanDetails(_loanId);
+        assertEq(repaid, debtBeforeRepay, "Repayment should be capped at outstanding debt");
+        assertEq(status, uint8(LoanStatus.REPAID), "Loan should be marked repaid");
+        vm.stopPrank();
+    }
+
+    function testRepayLoanFailsIfSenderIsNotOwnerOfLoan() public {
+        // createVaultAndFund(1000000e18);
+        uint256 collateralAmount = 10000 * 1e18;
+        uint256 borrowAmount = 1000 * 1e6;
+
+        depositCollateralFor(user1, address(token1), collateralAmount);
+        uint256 _positionId = depositCollateralFor(user2, address(token1), collateralAmount);
+
+        vm.startPrank(user1);
+        uint256 _loanId = lendbitSpoke.takeLoan(address(token4), borrowAmount, 365 days);
+        vm.stopPrank();
+
+        // Attempt to repay from a different user
+        vm.startPrank(user2);
+        token4.mint(user2, borrowAmount);
+        token4.approve(address(lendbitSpoke), borrowAmount);
+
+        vm.expectRevert(abi.encodeWithSelector(NOT_LOAN_OWNER.selector, _positionId));
+        executeRepayLoan(_loanId, borrowAmount);
+        vm.stopPrank();
+    }
+
     // =============================================================
     //                       VALUE CALCULATION TESTS
     // =============================================================
@@ -1052,7 +1187,8 @@ contract LendbitSpokeTest is Base {
         uint256 loanId1 = lendbitSpoke.takeLoan(address(token4), borrowAmount1, 365 days);
         uint256 loanId2 = lendbitSpoke.takeLoan(address(token4), borrowAmount2, 365 days);
         token4.approve(address(lendbitSpoke), borrowAmount1);
-        lendbitSpoke.repayLoan(loanId1, borrowAmount1);
+        executeRepayLoan(loanId1, borrowAmount1);
+        // lendbitSpoke.repayLoan(loanId1, borrowAmount1);
         vm.stopPrank();
 
         vm.startPrank(user2);
@@ -1061,7 +1197,8 @@ contract LendbitSpokeTest is Base {
         uint256 loanId5 = lendbitSpoke.takeLoan(address(token4), borrowAmount1, 365 days);
 
         token4.approve(address(lendbitSpoke), borrowAmount2);
-        lendbitSpoke.repayLoan(loanId4, borrowAmount2);
+        executeRepayLoan(loanId4, borrowAmount2);
+        // lendbitSpoke.repayLoan(loanId4, borrowAmount2);
         vm.stopPrank();
 
         uint256[] memory activeLoanIds = lendbitSpoke.getActiveLoanIds();
@@ -1082,8 +1219,9 @@ contract LendbitSpokeTest is Base {
 
         vm.startPrank(user1);
         uint256 loanId = lendbitSpoke.takeLoan(address(token4), borrowAmount, tenure);
-        // token4.approve(address(lendbitSpoke), borrowAmount / 2);
+        token4.approve(address(lendbitSpoke), borrowAmount / 2);
         // lendbitSpoke.repayLoan(loanId, borrowAmount / 2);
+        executeRepayLoan(loanId, borrowAmount / 2);
         vm.stopPrank();
         vm.warp(block.timestamp + 365 days);
 
@@ -1103,13 +1241,12 @@ contract LendbitSpokeTest is Base {
         assertEq(positionId, 1, "Position ID should match");
         assertEq(token, address(token4), "Loan token address should match");
         assertEq(principal, borrowAmount, "Principal amount should match");
-        assertEq(debt, (borrowAmount * 120 / 100), "debt amount should have increased by 20% of principal");
-        // assertEq(
-        //     debt,
-        //     (borrowAmount * 20 / 100) + (borrowAmount / 2),
-        //     "debt amount should have increased by 20% of principal"
-        // );
-        // assertEq(repaid, borrowAmount / 2, "Repaid amount should match");
+        assertEq(
+            debt,
+            (borrowAmount * 20 / 100) + (borrowAmount / 2),
+            "debt amount should have increased by 20% of principal"
+        );
+        assertEq(repaid, borrowAmount / 2, "Repaid amount should match");
         assertEq(startTimestamp, (block.timestamp - 365 days), "Start time should match");
         assertEq(tenureSeconds, tenure, "End time should match");
         assertEq(annualRateBps, 2000, "Interest rate should match");
@@ -1152,6 +1289,27 @@ contract LendbitSpokeTest is Base {
         }
         vm.stopPrank();
         positionId = lendbitSpoke.getPositionIdForUser(_user);
+    }
+
+    function executeRepayLoan(uint256 _loanId, uint256 _amount) internal override returns (uint256) {
+        (RepayRequest memory request, bytes memory signature) = buildRepayRequest(_loanId, _amount);
+        return lendbitSpoke.repayLoan(request, signature);
+    }
+
+    function createRepayRequest(uint256 _loanId, uint256 _amount)
+        internal
+        override
+        returns (RepayRequest memory request)
+    {
+        request = RepayRequest({
+            action: REPAY_ACTION,
+            loanId: _loanId,
+            amount: _amount,
+            sourceChainId: block.chainid,
+            targetChainId: block.chainid,
+            nonce: ++repayRequestNonce,
+            contractAddress: address(lendbitSpoke)
+        });
     }
 
     function _whitelistUserAddresses() internal {

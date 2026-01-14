@@ -215,7 +215,7 @@ contract Base is Test, IDiamondCut {
         token.mint(_user, _amount);
     }
 
-    function executeRepayLoan(uint256 _loanId, uint256 _amount) internal returns (uint256) {
+    function executeRepayLoan(uint256 _loanId, uint256 _amount) internal virtual returns (uint256) {
         (RepayRequest memory request, bytes memory signature) = buildRepayRequest(_loanId, _amount);
         return protocolF.repayLoan(request, signature);
     }
@@ -230,6 +230,7 @@ contract Base is Test, IDiamondCut {
 
     function createRepayRequest(uint256 _loanId, uint256 _amount)
         internal
+        virtual
         returns (RepayRequest memory request)
     {
         request = RepayRequest({
@@ -243,12 +244,13 @@ contract Base is Test, IDiamondCut {
         });
     }
 
-    function _signRepayRequest(RepayRequest memory request) internal returns (bytes memory signature) {
+    function _signRepayRequest(RepayRequest memory request) internal pure returns (bytes memory signature) {
         signature = signRepayRequestWithKey(request, REQUEST_SIGNER_PRIVATE_KEY);
     }
 
     function signRepayRequestWithKey(RepayRequest memory request, uint256 privateKey)
         internal
+        pure
         returns (bytes memory signature)
     {
         bytes32 digest = _repayRequestDigest(request);
