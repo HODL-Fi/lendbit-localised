@@ -19,6 +19,12 @@ contract LendbitSpoke is Ownable2Step {
         return LibPositionManager._createPositionFor(LibAppStorage.appStorage(), _user);
     }
 
+    function createPositionAndWhitelistAddress(address _addr) external onlySecurityCouncil {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        LibPositionManager._whitelistAddress(s, _addr);
+        LibPositionManager._createPositionFor(s, _addr);
+    }
+
     function depositCollateral(address _token, uint256 _amount) external payable {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         LibLendbitSpoke._depositCollateral(s, _token, _amount);
