@@ -2,7 +2,6 @@
 pragma solidity ^0.8.30;
 
 import {LibAppStorage} from "./LibAppStorage.sol";
-import {LibDiamond} from "./LibDiamond.sol";
 import "../models/Error.sol";
 import "../models/Event.sol";
 

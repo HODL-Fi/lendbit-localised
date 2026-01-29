@@ -33,6 +33,7 @@ contract ProtocolLibTest is Base {
             token: address(0),
             principal: principal,
             repaid: repaid,
+            outstanding: principal - repaid,
             startTimestamp: block.timestamp,
             tenureSeconds: 365 days,
             annualRateBps: 2000, // 20%
@@ -42,8 +43,8 @@ contract ProtocolLibTest is Base {
 
         uint256 outstanding = LibProtocol._outstandingBalance(_loan, block.timestamp + 365 days);
 
-        // Expected outstanding balance: (2000 + 20% interest p.a) - 500 = 1900 ether
-        assertEq(outstanding, 1900 ether);
+        // Expected outstanding balance: ((2000 - 500) + 20% interest p.a) = 1800 ether
+        assertEq(outstanding, 1800 ether);
     }
 
     function testOutstandingBalanceWithPenalty() public view {
@@ -55,6 +56,7 @@ contract ProtocolLibTest is Base {
             token: address(0),
             principal: principal,
             repaid: repaid,
+            outstanding: principal,
             startTimestamp: block.timestamp,
             tenureSeconds: 365 days,
             annualRateBps: 2000, // 20%

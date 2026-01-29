@@ -13,12 +13,6 @@ import "../contracts/Diamond.sol";
 import "../contracts/models/Error.sol";
 import "../contracts/models/Event.sol";
 
-import {
-    IFunctionsSubscriptions
-} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/interfaces/IFunctionsSubscriptions.sol";
-import {IFunctionsRouter} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/interfaces/IFunctionsRouter.sol";
-import {FunctionsResponse} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/libraries/FunctionsResponse.sol";
-
 contract PriceOracleTest is Base {
     uint256 baseMainnetFork;
     uint256 baseSepoliaFork;

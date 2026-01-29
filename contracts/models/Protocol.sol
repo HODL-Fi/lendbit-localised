@@ -6,6 +6,7 @@ struct Loan {
     address token;
     uint256 principal; // amount borrowed
     uint256 repaid;
+    uint256 outstanding; // principal + interest accrued - repaid
     uint256 startTimestamp;
     uint256 tenureSeconds;
     uint16 annualRateBps;
