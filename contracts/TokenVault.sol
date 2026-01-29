@@ -4,11 +4,6 @@ pragma solidity ^0.8.19;
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import {LibDiamond} from "./libraries/LibDiamond.sol";
-import {IVaultManager} from "./interfaces/IVaultManager.sol";
-
-// import {Constants} from "./utils/constants/Constant.sol";
-// import {IWeth} from "./interfaces/Iweth.sol";
 
 /**
  * @title Lendbit VTokenVault

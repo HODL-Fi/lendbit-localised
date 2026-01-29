@@ -14,6 +14,7 @@ import "../contracts/facets/ProtocolFacet.sol";
 import "../contracts/facets/PositionManagerFacet.sol";
 import "../contracts/facets/VaultManagerFacet.sol";
 import "../contracts/facets/YieldStrategyFacet.sol";
+import "../contracts/facets/GettersFacet.sol";
 import "../contracts/Diamond.sol";
 
 import {Test} from "forge-std/Test.sol";
@@ -30,6 +31,7 @@ contract Base is Test, IDiamondCut {
     PriceOracleFacet priceOracleF;
     LiquidationFacet liquidationF;
     YieldStrategyFacet yieldStrategyF;
+    GettersFacet gettersF;
 
     // Test tokens
     ERC20Mock token1;
@@ -73,10 +75,11 @@ contract Base is Test, IDiamondCut {
         priceOracleF = new PriceOracleFacet();
         liquidationF = new LiquidationFacet();
         yieldStrategyF = new YieldStrategyFacet();
+        gettersF = new GettersFacet();
 
         //upgrade diamond with facets
         //build cut struct
-        FacetCut[] memory cut = new FacetCut[](8);
+        FacetCut[] memory cut = new FacetCut[](9);
 
         cut[0] =
         (FacetCut({
@@ -133,6 +136,12 @@ contract Base is Test, IDiamondCut {
                 action: FacetCutAction.Add,
                 functionSelectors: generateSelectors("YieldStrategyFacet")
             }));
+        cut[8] =
+        (FacetCut({
+                facetAddress: address(gettersF),
+                action: FacetCutAction.Add,
+                functionSelectors: generateSelectors("GettersFacet")
+            }));
 
         protocolF = ProtocolFacet(address(diamond));
         positionManagerF = PositionManagerFacet(address(diamond));
@@ -140,6 +149,7 @@ contract Base is Test, IDiamondCut {
         priceOracleF = PriceOracleFacet(address(diamond));
         liquidationF = LiquidationFacet(address(diamond));
         yieldStrategyF = YieldStrategyFacet(address(diamond));
+        gettersF = GettersFacet(address(diamond));
 
         //upgrade diamond
         IDiamondCut(address(diamond)).diamondCut(cut, address(0x0), "");

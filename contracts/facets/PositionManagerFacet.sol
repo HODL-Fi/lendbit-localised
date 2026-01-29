@@ -53,7 +53,11 @@ contract PositionManagerFacet {
 
     // Modifiers
     modifier onlySecurityCouncil() {
-        if (msg.sender != LibDiamond.contractOwner()) revert ONLY_SECURITY_COUNCIL();
+        _onlySecurityCouncil();
         _;
+    }
+
+    function _onlySecurityCouncil() internal view {
+        if (msg.sender != LibDiamond.contractOwner()) revert ONLY_SECURITY_COUNCIL();
     }
 }

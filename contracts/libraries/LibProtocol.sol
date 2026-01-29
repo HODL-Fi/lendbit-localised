@@ -81,6 +81,7 @@ library LibProtocol {
             token: _token,
             principal: _principal,
             repaid: 0,
+            outstanding: _principal,
             tenureSeconds: _tenureSeconds,
             startTimestamp: block.timestamp,
             annualRateBps: s.s_interestRate,
@@ -120,6 +121,7 @@ library LibProtocol {
 
         // Update loan repaid amount
         _loan.repaid += _amount;
+        _loan.outstanding = _loanDebt - _amount;
 
         // If fully repaid, update loan status and move to closed loans
         if (_loanDebt - _amount == 0) {
@@ -452,7 +454,6 @@ library LibProtocol {
     }
 
     function _outstandingBalance(Loan memory _loan, uint256 _timestamp) internal pure returns (uint256) {
-        // Loan memory _loan = s.s_loans[_loanId];
         if (_loan.status != LoanStatus.FULFILLED) return 0;
 
         uint256 _timeElapsed = _timestamp - _loan.startTimestamp;
@@ -461,12 +462,12 @@ library LibProtocol {
         }
 
         uint256 _interest =
-            (_loan.principal * _loan.annualRateBps * _timeElapsed) / (Constants.BASIS_POINTS_SCALE_256 * 365 days);
-        uint256 _totalOwed = _loan.principal + _interest;
+            (_loan.outstanding * _loan.annualRateBps * _timeElapsed) / (Constants.BASIS_POINTS_SCALE_256 * 365 days);
+        uint256 _totalOwed = _loan.outstanding + _interest;
 
         if (_timestamp > (_loan.startTimestamp + _loan.tenureSeconds)) {
             uint256 penaltyTime = _timestamp - (_loan.startTimestamp + _loan.tenureSeconds);
-            uint256 penalty = (_loan.principal * (_loan.annualRateBps + _loan.penaltyRateBps) * penaltyTime)
+            uint256 penalty = (_loan.outstanding * (_loan.annualRateBps + _loan.penaltyRateBps) * penaltyTime)
                 / (Constants.BASIS_POINTS_SCALE_256 * 365 days);
             _totalOwed += penalty;
         }
@@ -475,7 +476,7 @@ library LibProtocol {
             return 0;
         }
 
-        return _totalOwed - _loan.repaid;
+        return _totalOwed;
     }
 
     function _outstandingBalance(LibAppStorage.StorageLayout storage s, uint256 _loanId, uint256 _timestamp)
