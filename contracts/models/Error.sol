@@ -20,12 +20,12 @@ error REQUEST_BORROW_NONCE_USED(address wallet, uint256 nonce);
 error REQUEST_BORROW_TARGET_CHAIN_MISMATCH(uint256 expected, uint256 provided);
 error REQUEST_BORROW_CONTRACT_MISMATCH(address expected, address provided);
 
-
 error AMOUNT_ZERO();
 error AMOUNT_MISMATCH(uint256 given, uint256 expected);
 error TRANSFER_FAILED();
 error INSUFFICIENT_ALLOWANCE();
 error INSUFFICIENT_BALANCE();
+error INSUFFICIENT_COLLATERAL();
 error HEALTH_FACTOR_TOO_LOW(uint256 healthFactor);
 error NOT_LIQUIDATABLE();
 error NO_ACTIVE_BORROW_FOR_TOKEN(uint256 positionId, address token);

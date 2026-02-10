@@ -2,6 +2,10 @@
 pragma solidity ^0.8.30;
 
 import {Base, MockV3Aggregator} from "./Base.t.sol";
+import {LibAppStorage} from "../contracts/libraries/LibAppStorage.sol";
+import {LibLiquidation} from "../contracts/libraries/LibLiquidation.sol";
+import {NO_COLLATERAL_FOR_TOKEN} from "../contracts/models/Error.sol";
+import {LoanStatus} from "../contracts/models/Protocol.sol";
 import {PositionLiquidated, Repay, LoanLiquidated, LoanRepayment} from "../contracts/models/Event.sol";
 
 contract LiquidationTest is Base {
@@ -28,7 +32,7 @@ contract LiquidationTest is Base {
         _pricefeed4.updateAnswer(1000e8); // $1.5/token
 
         _isLiquidatable = liquidationF.isLiquidatable(_positionId);
-        uint256 _healthFactor = protocolF.getHealthFactor(_positionId, 0);
+        uint256 _healthFactor = gettersF.getHealthFactor(_positionId, 0);
         assertTrue(_isLiquidatable, "user should be liquidatable");
         assertLt(_healthFactor, 1e18, "health factor should be less than 1");
     }
@@ -45,7 +49,7 @@ contract LiquidationTest is Base {
         // Make position liquidatable
         MockV3Aggregator(pricefeed4).updateAnswer(1000e8);
 
-        uint256 _userCollateralBefore = protocolF.getPositionCollateral(_positionId, address(token1));
+        uint256 _userCollateralBefore = gettersF.getPositionCollateral(_positionId, address(token1));
         uint256 _t1BalanceBefore = token1.balanceOf(liquidator);
 
         vm.startPrank(liquidator);
@@ -62,7 +66,7 @@ contract LiquidationTest is Base {
 
         vm.assertGt(_borrowAmount, token4.balanceOf(liquidator));
         vm.assertLt(_t1BalanceBefore, token1.balanceOf(liquidator));
-        vm.assertGt(_userCollateralBefore, protocolF.getPositionCollateral(_positionId, address(token1)));
+        vm.assertGt(_userCollateralBefore, gettersF.getPositionCollateral(_positionId, address(token1)));
     }
 
     function testLiquidatePositionWithNativeTokenCollateral_Success() public {
@@ -77,7 +81,7 @@ contract LiquidationTest is Base {
         // Make position liquidatable
         MockV3Aggregator(pricefeed4).updateAnswer(1000e8);
 
-        uint256 _userCollateralBefore = protocolF.getPositionCollateral(_positionId, address(1));
+        uint256 _userCollateralBefore = gettersF.getPositionCollateral(_positionId, address(1));
         uint256 _t1BalanceBefore = liquidator.balance;
 
         vm.startPrank(liquidator);
@@ -94,7 +98,7 @@ contract LiquidationTest is Base {
 
         vm.assertGt(_borrowAmount, token4.balanceOf(liquidator));
         vm.assertLt(_t1BalanceBefore, liquidator.balance);
-        vm.assertGt(_userCollateralBefore, protocolF.getPositionCollateral(_positionId, address(1)));
+        vm.assertGt(_userCollateralBefore, gettersF.getPositionCollateral(_positionId, address(1)));
     }
 
     function testLiquidatePosition_RevertNotLiquidatable() public {
@@ -212,7 +216,7 @@ contract LiquidationTest is Base {
         _pricefeed4.updateAnswer(1000e8); // $1.5/token
 
         _isLiquidatable = liquidationF.isLiquidatable(_positionId);
-        uint256 _healthFactor = protocolF.getHealthFactor(_positionId, 0);
+        uint256 _healthFactor = gettersF.getHealthFactor(_positionId, 0);
         assertTrue(_isLiquidatable, "user should be liquidatable");
         assertLt(_healthFactor, 1e18, "health factor should be less than 1");
     }
@@ -225,28 +229,35 @@ contract LiquidationTest is Base {
         vm.startPrank(user1);
         uint256 _loanId = protocolF.takeLoan(address(token4), _borrowAmount, 90 days);
         vm.stopPrank();
+        vm.warp(block.timestamp + 100 days);
+
+        uint256 _debt = gettersF.getOutstandingDebtForLoan(_loanId);
 
         // Make position liquidatable
         MockV3Aggregator(pricefeed4).updateAnswer(1000e8);
 
-        uint256 _userCollateralBefore = protocolF.getPositionCollateral(_positionId, address(token1));
+        uint256 _userCollateralBefore = gettersF.getPositionCollateral(_positionId, address(token1));
         uint256 _t1BalanceBefore = token1.balanceOf(liquidator);
 
         vm.startPrank(liquidator);
         // Give liquidator enough allowance and balance
-        token4.mint(liquidator, _borrowAmount);
-        token4.approve(address(liquidationF), _borrowAmount);
+        token4.mint(liquidator, _debt);
+        token4.approve(address(liquidationF), _debt);
 
         vm.expectEmit(true, true, true, false);
         emit LoanLiquidated(_positionId, _loanId, address(token1), liquidator, 0);
         vm.expectEmit(true, true, false, false);
         emit LoanRepayment(_positionId, _loanId, address(token4), 0);
-        liquidationF.liquidateLoan(_loanId, _borrowAmount, address(token1));
+        liquidationF.liquidateLoan(_loanId, _debt, address(token1));
         vm.stopPrank();
 
-        vm.assertGt(_borrowAmount, token4.balanceOf(liquidator));
-        vm.assertLt(_t1BalanceBefore, token1.balanceOf(liquidator));
-        vm.assertGt(_userCollateralBefore, protocolF.getPositionCollateral(_positionId, address(token1)));
+        (,, uint256 principal, uint256 repaid,,, uint256 debt,,, uint8 status) = gettersF.getLoanDetails(_loanId);
+
+        assertEq(repaid, _debt);
+        assertEq(uint8(LoanStatus.LIQUIDATED), status);
+        assertGt(_borrowAmount, token4.balanceOf(liquidator));
+        assertLt(_t1BalanceBefore, token1.balanceOf(liquidator));
+        assertGt(_userCollateralBefore, gettersF.getPositionCollateral(_positionId, address(token1)));
     }
 
     function testLiquidateLoanWithNativeTokenCollateral_Success() public {
@@ -257,28 +268,36 @@ contract LiquidationTest is Base {
         vm.startPrank(user1);
         uint256 _loanId = protocolF.takeLoan(address(token4), _borrowAmount, 90 days);
         vm.stopPrank();
+        vm.warp(block.timestamp + 100 days);
+
+        uint256 _debt = gettersF.getOutstandingDebtForLoan(_loanId);
 
         // Make position liquidatable
         MockV3Aggregator(pricefeed4).updateAnswer(1000e8);
 
-        uint256 _userCollateralBefore = protocolF.getPositionCollateral(_positionId, address(1));
+        uint256 _userCollateralBefore = gettersF.getPositionCollateral(_positionId, address(1));
         uint256 _t1BalanceBefore = liquidator.balance;
 
         vm.startPrank(liquidator);
         // Give liquidator enough allowance and balance
-        token4.mint(liquidator, _borrowAmount);
-        token4.approve(address(liquidationF), _borrowAmount);
+        token4.mint(liquidator, _debt);
+        token4.approve(address(liquidationF), _debt);
 
         vm.expectEmit(true, true, true, false);
         emit LoanLiquidated(_positionId, _loanId, address(1), liquidator, 0);
         vm.expectEmit(true, true, false, false);
         emit LoanRepayment(_positionId, _loanId, address(token4), 0);
-        liquidationF.liquidateLoan(_loanId, _borrowAmount, address(1));
+        liquidationF.liquidateLoan(_loanId, _debt, address(1));
         vm.stopPrank();
 
-        vm.assertGt(_borrowAmount, token4.balanceOf(liquidator));
-        vm.assertLt(_t1BalanceBefore, liquidator.balance);
-        vm.assertGt(_userCollateralBefore, protocolF.getPositionCollateral(_positionId, address(1)));
+        (,, uint256 principal, uint256 repaid,,, uint256 debt,,, uint8 status) = gettersF.getLoanDetails(_loanId);
+
+        // test checks
+        assertEq(repaid, _debt);
+        assertEq(uint8(LoanStatus.LIQUIDATED), status);
+        assertGt(_borrowAmount, token4.balanceOf(liquidator));
+        assertLt(_t1BalanceBefore, liquidator.balance);
+        assertGt(_userCollateralBefore, gettersF.getPositionCollateral(_positionId, address(1)));
     }
 
     function testLiquidateLoan_RevertNotLiquidatable() public {
@@ -370,8 +389,42 @@ contract LiquidationTest is Base {
 
         // Use a token with no collateral
         vm.startPrank(liquidator);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(NO_COLLATERAL_FOR_TOKEN.selector, _positionId, address(token2)));
         liquidationF.liquidatePosition(_positionId, _borrowAmount, address(token4), address(token2));
         vm.stopPrank();
+    }
+
+    function testGetAmountToLiquidate() public {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+
+        uint256 _positionId = 1;
+
+        address _collateralToken = address(token1);
+
+        address _debtToken = address(token3);
+
+        uint256 _amount = 1000e6;
+
+        s.s_supportedCollateralTokens[_collateralToken] = true;
+
+        s.s_supportedToken[_debtToken] = true;
+
+        s.s_tokenPriceFeed[_collateralToken] = pricefeed1;
+
+        s.s_tokenPriceFeed[_debtToken] = pricefeed3;
+
+        s.s_positionCollateral[_positionId][_collateralToken] = 4 ether;
+
+        s.s_supportedCollateralTokens[_debtToken] = true;
+
+        s.s_positionCollateral[_positionId][_debtToken] = 4 ether;
+
+        uint256 _amountToLiquidate = LibLiquidation._getAmountToLiquidate(s, _debtToken, _debtToken, _amount);
+
+        uint256 _amountToLiquidate2 = LibLiquidation._getAmountToLiquidate(s, _collateralToken, _debtToken, _amount);
+
+        assertEq(_amountToLiquidate, _amount);
+
+        assertEq(_amountToLiquidate2, _amount); // 666666666666666666
     }
 }

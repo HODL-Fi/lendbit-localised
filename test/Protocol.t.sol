@@ -36,16 +36,16 @@ contract ProtocolTest is Base {
         emit CollateralTokenLTVUpdated(newToken, 0, baseTokenLTV);
         protocolF.addCollateralToken(newToken, pricefeed1, baseTokenLTV);
 
-        assertTrue(protocolF.isCollateralTokenSupported(newToken));
+        assertTrue(gettersF.isCollateralTokenSupported(newToken));
 
-        address[] memory allTokens = protocolF.getAllCollateralTokens();
+        address[] memory allTokens = gettersF.getAllCollateralTokens();
         bool found = false;
         for (uint256 i = 0; i < allTokens.length; i++) {
             if (allTokens[i] == newToken) {
                 found = true;
                 break;
             }
-            assertEq(protocolF.getCollateralTokenLTV(allTokens[i]), baseTokenLTV);
+            assertEq(gettersF.getCollateralTokenLTV(allTokens[i]), baseTokenLTV);
         }
         assertTrue(found, "Token should be in collateral tokens array");
     }
@@ -81,16 +81,16 @@ contract ProtocolTest is Base {
     // =============================================================
 
     function testRemoveCollateralToken() public {
-        assertTrue(protocolF.isCollateralTokenSupported(address(token1)));
+        assertTrue(gettersF.isCollateralTokenSupported(address(token1)));
 
         vm.expectEmit(true, false, false, false);
         emit CollateralTokenRemoved(address(token1));
 
         protocolF.removeCollateralToken(address(token1));
 
-        assertFalse(protocolF.isCollateralTokenSupported(address(token1)));
+        assertFalse(gettersF.isCollateralTokenSupported(address(token1)));
 
-        address[] memory allTokens = protocolF.getAllCollateralTokens();
+        address[] memory allTokens = gettersF.getAllCollateralTokens();
         bool found = false;
         for (uint256 i = 0; i < allTokens.length; i++) {
             if (allTokens[i] == address(token1)) {
@@ -146,7 +146,7 @@ contract ProtocolTest is Base {
         vm.stopPrank();
 
         // Verify collateral was deposited
-        uint256 collateralBalance = protocolF.getPositionCollateral(1, address(token1));
+        uint256 collateralBalance = gettersF.getPositionCollateral(1, address(token1));
         assertEq(collateralBalance, depositAmount);
 
         // Verify token was transferred
@@ -175,7 +175,7 @@ contract ProtocolTest is Base {
         vm.stopPrank();
 
         // Verify collateral was deposited
-        uint256 collateralBalance = protocolF.getPositionCollateral(1, address(1));
+        uint256 collateralBalance = gettersF.getPositionCollateral(1, address(1));
         assertEq(collateralBalance, depositAmount);
 
         // Verify token was transferred
@@ -225,7 +225,7 @@ contract ProtocolTest is Base {
         vm.stopPrank();
 
         // Verify total collateral
-        uint256 totalCollateral = protocolF.getPositionCollateral(positionId, address(token1));
+        uint256 totalCollateral = gettersF.getPositionCollateral(positionId, address(token1));
         assertEq(totalCollateral, depositAmount1 + depositAmount2);
     }
 
@@ -282,7 +282,7 @@ contract ProtocolTest is Base {
         emit CollateralTokenLTVUpdated(address(token1), baseTokenLTV, _newLTV);
         protocolF.setCollateralTokenLtv(address(token1), _newLTV);
 
-        assertEq(_newLTV, protocolF.getCollateralTokenLTV(address(token1)));
+        assertEq(_newLTV, gettersF.getCollateralTokenLTV(address(token1)));
     }
 
     function testSetCollateralTokenLTVFailsIfNotSecurityCouncil() public {
@@ -323,7 +323,7 @@ contract ProtocolTest is Base {
         emit InterestRateUpdated(_newInterestRate, _newPenaltyRate);
         protocolF.setInterestRate(_newInterestRate, _newPenaltyRate);
 
-        (uint16 _interestBps, uint16 _penaltyBps) = protocolF.getInterestRate();
+        (uint16 _interestBps, uint16 _penaltyBps) = gettersF.getInterestRate();
         assertEq(_newInterestRate, _interestBps);
         assertEq(_newPenaltyRate, _penaltyBps);
     }
@@ -362,7 +362,7 @@ contract ProtocolTest is Base {
         uint256 positionId = positionManagerF.getPositionIdForUser(user1);
 
         // Verify initial collateral balance
-        assertEq(protocolF.getPositionCollateral(positionId, address(token1)), depositAmount);
+        assertEq(gettersF.getPositionCollateral(positionId, address(token1)), depositAmount);
         assertEq(token1.balanceOf(user1), 0);
         assertEq(token1.balanceOf(address(diamond)), depositAmount);
 
@@ -375,7 +375,7 @@ contract ProtocolTest is Base {
 
         // Verify collateral was withdrawn
         uint256 remainingCollateral = depositAmount - withdrawAmount;
-        assertEq(protocolF.getPositionCollateral(positionId, address(token1)), remainingCollateral);
+        assertEq(gettersF.getPositionCollateral(positionId, address(token1)), remainingCollateral);
         assertEq(token1.balanceOf(user1), withdrawAmount);
         assertEq(token1.balanceOf(address(diamond)), remainingCollateral);
     }
@@ -400,7 +400,7 @@ contract ProtocolTest is Base {
 
         // Verify collateral was withdrawn
         uint256 remainingCollateral = depositAmount - withdrawAmount;
-        assertEq(protocolF.getPositionCollateral(positionId, address(1)), remainingCollateral);
+        assertEq(gettersF.getPositionCollateral(positionId, address(1)), remainingCollateral);
         assertEq(user1.balance, withdrawAmount);
         assertEq(address(diamond).balance, remainingCollateral);
     }
@@ -424,7 +424,7 @@ contract ProtocolTest is Base {
         vm.stopPrank();
 
         // Verify all collateral was withdrawn
-        assertEq(protocolF.getPositionCollateral(positionId, address(token1)), 0);
+        assertEq(gettersF.getPositionCollateral(positionId, address(token1)), 0);
         assertEq(token1.balanceOf(user1), depositAmount);
         assertEq(token1.balanceOf(address(diamond)), 0);
     }
@@ -454,8 +454,8 @@ contract ProtocolTest is Base {
         vm.stopPrank();
 
         // Verify withdrawals
-        assertEq(protocolF.getPositionCollateral(positionId, address(token1)), depositAmount1 - withdrawAmount1);
-        assertEq(protocolF.getPositionCollateral(positionId, address(token2)), depositAmount2 - withdrawAmount2);
+        assertEq(gettersF.getPositionCollateral(positionId, address(token1)), depositAmount1 - withdrawAmount1);
+        assertEq(gettersF.getPositionCollateral(positionId, address(token2)), depositAmount2 - withdrawAmount2);
         assertEq(token1.balanceOf(user1), withdrawAmount1);
         assertEq(token2.balanceOf(user1), withdrawAmount2);
     }
@@ -496,14 +496,14 @@ contract ProtocolTest is Base {
         // Note: The current implementation doesn't have zero amount check in withdraw
         // but we can test withdrawing 0 should leave balances unchanged
         uint256 positionId = positionManagerF.getPositionIdForUser(user1);
-        uint256 initialBalance = protocolF.getPositionCollateral(positionId, address(token1));
+        uint256 initialBalance = gettersF.getPositionCollateral(positionId, address(token1));
         uint256 initialUserBalance = token1.balanceOf(user1);
 
         vm.expectRevert(abi.encodeWithSelector(AMOUNT_ZERO.selector));
         protocolF.withdrawCollateral(address(token1), 0);
 
         // Balances should remain unchanged
-        assertEq(protocolF.getPositionCollateral(positionId, address(token1)), initialBalance);
+        assertEq(gettersF.getPositionCollateral(positionId, address(token1)), initialBalance);
         assertEq(token1.balanceOf(user1), initialUserBalance);
         vm.stopPrank();
     }
@@ -543,8 +543,8 @@ contract ProtocolTest is Base {
         protocolF.withdrawCollateral(address(token2), 1);
 
         // Verify token1 balance is correct and token2 balance is still 0
-        assertEq(protocolF.getPositionCollateral(positionId, address(token1)), 500 * 1e18);
-        assertEq(protocolF.getPositionCollateral(positionId, address(token2)), 0);
+        assertEq(gettersF.getPositionCollateral(positionId, address(token1)), 500 * 1e18);
+        assertEq(gettersF.getPositionCollateral(positionId, address(token2)), 0);
         vm.stopPrank();
     }
 
@@ -575,8 +575,8 @@ contract ProtocolTest is Base {
         vm.stopPrank();
 
         // Verify only user1's collateral was affected
-        assertEq(protocolF.getPositionCollateral(user1PositionId, address(token1)), depositAmount - withdrawAmount);
-        assertEq(protocolF.getPositionCollateral(user2PositionId, address(token1)), depositAmount);
+        assertEq(gettersF.getPositionCollateral(user1PositionId, address(token1)), depositAmount - withdrawAmount);
+        assertEq(gettersF.getPositionCollateral(user2PositionId, address(token1)), depositAmount);
         assertEq(token1.balanceOf(user1), withdrawAmount);
         assertEq(token1.balanceOf(user2), 0);
         assertEq(token1.balanceOf(address(diamond)), depositAmount * 2 - withdrawAmount);
@@ -594,15 +594,15 @@ contract ProtocolTest is Base {
 
         // Multiple partial withdrawals
         protocolF.withdrawCollateral(address(token1), 100 * 1e18);
-        assertEq(protocolF.getPositionCollateral(positionId, address(token1)), 900 * 1e18);
+        assertEq(gettersF.getPositionCollateral(positionId, address(token1)), 900 * 1e18);
         assertEq(token1.balanceOf(user1), 100 * 1e18);
 
         protocolF.withdrawCollateral(address(token1), 200 * 1e18);
-        assertEq(protocolF.getPositionCollateral(positionId, address(token1)), 700 * 1e18);
+        assertEq(gettersF.getPositionCollateral(positionId, address(token1)), 700 * 1e18);
         assertEq(token1.balanceOf(user1), 300 * 1e18);
 
         protocolF.withdrawCollateral(address(token1), 700 * 1e18); // Withdraw remaining
-        assertEq(protocolF.getPositionCollateral(positionId, address(token1)), 0);
+        assertEq(gettersF.getPositionCollateral(positionId, address(token1)), 0);
         assertEq(token1.balanceOf(user1), 1000 * 1e18);
 
         vm.stopPrank();
@@ -628,7 +628,7 @@ contract ProtocolTest is Base {
         vm.stopPrank();
 
         // Verify all collateral was withdrawn
-        assertEq(protocolF.getPositionCollateral(positionId, address(token1)), depositAmount);
+        assertEq(gettersF.getPositionCollateral(positionId, address(token1)), depositAmount);
         assertEq(token1.balanceOf(user1), 0);
         assertEq(token1.balanceOf(address(diamond)), depositAmount);
     }
@@ -650,14 +650,14 @@ contract ProtocolTest is Base {
         protocolF.depositCollateral(address(token1), _collateralAmount);
 
         uint256 _positionId = positionManagerF.getPositionIdForUser(user1);
-        uint256 _healthFactor = protocolF.getHealthFactor(_positionId, 0);
+        uint256 _healthFactor = gettersF.getHealthFactor(_positionId, 0);
 
         uint256 totalDebt = protocolF.borrow(address(token4), _borrowAmount);
         vm.stopPrank();
 
         assertEq(totalDebt, _borrowAmount);
-        assertLt(protocolF.getHealthFactor(_positionId, 0), _healthFactor);
-        assertEq(protocolF.getPositionBorrowedValue(_positionId), 250000e18);
+        assertLt(gettersF.getHealthFactor(_positionId, 0), _healthFactor);
+        assertEq(gettersF.getPositionBorrowedValue(_positionId), 250000e18);
         assertEq(token4.balanceOf(user1), _borrowAmount);
     }
 
@@ -815,7 +815,7 @@ contract ProtocolTest is Base {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
         bytes memory signature = abi.encodePacked(r, s, v);
         uint256 vaultBalanceBefore = token4.balanceOf(vault);
-        (uint16 interestRate,) = protocolF.getInterestRate();
+        (uint16 interestRate,) = gettersF.getInterestRate();
 
         vm.startPrank(user1);
         vm.expectEmit(true, true, true, false);
@@ -828,11 +828,11 @@ contract ProtocolTest is Base {
         assertEq(
             token4.balanceOf(vault), vaultBalanceBefore - borrowAmount, "Vault balance should reflect borrow amount"
         );
-        uint256[] memory activeLoanIds = protocolF.getUserActiveLoanIds(positionId);
+        uint256[] memory activeLoanIds = gettersF.getUserActiveLoanIds(positionId);
         assertEq(activeLoanIds.length, 1, "Position should track new active loan");
         assertEq(activeLoanIds[0], loanId, "Active loan ID should match the returned loanId");
         assertEq(
-            protocolF.getOutstandingDebtForLoan(loanId),
+            gettersF.getOutstandingDebtForLoan(loanId),
             borrowAmount,
             "Outstanding debt should match the principal at creation"
         );
@@ -856,14 +856,14 @@ contract ProtocolTest is Base {
         uint256 _vaultBalenceBefore = token4.balanceOf(vault);
 
         uint256 _positionId = positionManagerF.getPositionIdForUser(user1);
-        uint256 _healthFactor = protocolF.getHealthFactor(_positionId, 0);
+        uint256 _healthFactor = gettersF.getHealthFactor(_positionId, 0);
 
         uint256 loanId = protocolF.takeLoan(address(token4), _borrowAmount, _tenure);
-        uint256 totalDebt = protocolF.getTotalActiveDebt(_positionId);
+        uint256 totalDebt = gettersF.getTotalActiveDebt(_positionId);
         vm.stopPrank();
 
         assertEq(loanId, 1, "Loan ID should be 1 for the first loan");
-        assertLt(protocolF.getHealthFactor(_positionId, 0), _healthFactor);
+        assertLt(gettersF.getHealthFactor(_positionId, 0), _healthFactor);
         assertEq(totalDebt, 250000e18);
         assertEq(token4.balanceOf(user1), _borrowAmount);
         assertEq(token4.balanceOf(vault), _vaultBalenceBefore - _borrowAmount);
@@ -902,7 +902,7 @@ contract ProtocolTest is Base {
 
         vm.warp(block.timestamp + (365 days / 2)); // Warp half the tenure to accrue some interest
 
-        uint256 _debtBeforeRepay = protocolF.getOutstandingDebtForLoan(_loanId);
+        uint256 _debtBeforeRepay = gettersF.getOutstandingDebtForLoan(_loanId);
 
         // Mint tokens to user1 for repayment
         token4.mint(user1, _debtBeforeRepay);
@@ -991,7 +991,7 @@ contract ProtocolTest is Base {
         uint256 balanceBeforeRepay = token4.balanceOf(user1);
         vm.warp(block.timestamp + 30 days); // Warp to accrue some interest
 
-        uint256 debtBeforeRepay = protocolF.getOutstandingDebtForLoan(_loanId);
+        uint256 debtBeforeRepay = gettersF.getOutstandingDebtForLoan(_loanId);
         uint256 remainingDebt = protocolF.repayLoanFor(_positionId, _loanId, borrowAmount * 2);
 
         assertEq(remainingDebt, 0, "Debt should be zero after over-repayment");
@@ -1013,7 +1013,7 @@ contract ProtocolTest is Base {
 
         vm.warp(block.timestamp + (365 days / 2)); // Warp half the tenure to accrue some interest
 
-        uint256 _debtBeforeRepay = protocolF.getOutstandingDebtForLoan(_loanId);
+        uint256 _debtBeforeRepay = gettersF.getOutstandingDebtForLoan(_loanId);
 
         // Mint tokens to user1 for repayment
         token4.mint(user1, _debtBeforeRepay);
@@ -1102,7 +1102,7 @@ contract ProtocolTest is Base {
         uint256 balanceBeforeRepay = token4.balanceOf(user1);
         vm.warp(block.timestamp + 30 days); // Warp to accrue some interest
 
-        uint256 debtBeforeRepay = protocolF.getOutstandingDebtForLoan(_loanId);
+        uint256 debtBeforeRepay = gettersF.getOutstandingDebtForLoan(_loanId);
         uint256 remainingDebt = protocolF.repayLoan(_loanId, borrowAmount * 2);
 
         assertEq(remainingDebt, 0, "Debt should be zero after over-repayment");
@@ -1167,7 +1167,7 @@ contract ProtocolTest is Base {
         uint256 positionId = positionManagerF.getPositionIdForUser(user1);
 
         // Calculate health factor
-        uint256 healthFactor = protocolF.getHealthFactor(positionId, currentBorrowValue);
+        uint256 healthFactor = gettersF.getHealthFactor(positionId, currentBorrowValue);
 
         // Expected: (1.5M * 0.8) / 0.5M = 2.4
         uint256 collateralValue = 1000 * 1500 * 1e18;
@@ -1183,11 +1183,11 @@ contract ProtocolTest is Base {
         uint256 positionId = positionManagerF.getPositionIdForUser(user1);
 
         // With zero collateral and zero additional borrow, should return 0
-        uint256 healthFactor = protocolF.getHealthFactor(positionId, 0);
+        uint256 healthFactor = gettersF.getHealthFactor(positionId, 0);
         assertEq(healthFactor, 0, "Zero collateral with zero borrow should return 0");
 
         // With zero collateral and some borrow, should return 0
-        uint256 healthFactorWithBorrow = protocolF.getHealthFactor(positionId, 1000 * 1e18);
+        uint256 healthFactorWithBorrow = gettersF.getHealthFactor(positionId, 1000 * 1e18);
         assertEq(healthFactorWithBorrow, 0, "Zero collateral with borrow should return 0");
     }
 
@@ -1221,16 +1221,16 @@ contract ProtocolTest is Base {
         assertEq(token2Value, 1000 * 300 * 1e18, "Token2 value should be correct");
 
         // Test total collateral value
-        uint256 totalCollateralValue = protocolF.getPositionCollateralValue(positionId);
+        uint256 totalCollateralValue = gettersF.getPositionCollateralValue(positionId);
         assertEq(totalCollateralValue, token1Value + token2Value, "Total collateral should sum individual values");
 
         // Test borrowed value (should be 0)
-        uint256 borrowedValue = protocolF.getPositionBorrowedValue(positionId);
+        uint256 borrowedValue = gettersF.getPositionBorrowedValue(positionId);
         assertEq(borrowedValue, 0, "Borrowed value should be 0");
 
         // Test health factor with hypothetical borrow
         uint256 hypotheticalBorrow = 200000 * 1e18; // $200k
-        uint256 healthFactor = protocolF.getHealthFactor(positionId, hypotheticalBorrow);
+        uint256 healthFactor = gettersF.getHealthFactor(positionId, hypotheticalBorrow);
 
         // Expected: ((750k + 300k) * 0.8) / 200k = 4.2
         uint256 expectedHealthFactor = (totalCollateralValue * 8000 * 1e18 / 10000) / hypotheticalBorrow;
@@ -1246,7 +1246,7 @@ contract ProtocolTest is Base {
         uint256 positionId = positionManagerF.getPositionIdForUser(user1);
 
         // Should return 0 for empty position
-        uint256 value = protocolF.getPositionCollateralValue(positionId);
+        uint256 value = gettersF.getPositionCollateralValue(positionId);
         assertEq(value, 0);
     }
 
@@ -1256,7 +1256,7 @@ contract ProtocolTest is Base {
         uint256 positionId = positionManagerF.getPositionIdForUser(user1);
 
         // Should return 0 for new position with no borrows
-        uint256 value = protocolF.getPositionBorrowedValue(positionId);
+        uint256 value = gettersF.getPositionBorrowedValue(positionId);
         assertEq(value, 0);
     }
 
@@ -1272,7 +1272,7 @@ contract ProtocolTest is Base {
         uint256 positionId = positionManagerF.getPositionIdForUser(user1);
 
         // Health factor should be max (type(uint256).max) when no borrows
-        uint256 healthFactor = protocolF.getHealthFactor(positionId, 0);
+        uint256 healthFactor = gettersF.getHealthFactor(positionId, 0);
         assertEq(healthFactor, 12e41);
     }
 
@@ -1283,15 +1283,15 @@ contract ProtocolTest is Base {
         // With collateral value 0 and borrow value > 0, health factor calculation
         // will depend on the actual collateral value from price feeds
         // This will likely revert or return 0 without proper price feeds
-        uint256 _healthFactor = protocolF.getHealthFactor(positionId, currentBorrowValue);
+        uint256 _healthFactor = gettersF.getHealthFactor(positionId, currentBorrowValue);
         assertEq(_healthFactor, 2.4e18);
 
         // 100% collateral value
-        _healthFactor = protocolF.getHealthFactor(positionId, 1500e18);
+        _healthFactor = gettersF.getHealthFactor(positionId, 1500e18);
         assertEq(_healthFactor, 0.8e18);
 
         // 80% liquidation threshold
-        _healthFactor = protocolF.getHealthFactor(positionId, 1200e18);
+        _healthFactor = gettersF.getHealthFactor(positionId, 1200e18);
         assertEq(_healthFactor, 1e18);
     }
 
@@ -1300,14 +1300,14 @@ contract ProtocolTest is Base {
     // =============================================================
 
     function testIsCollateralTokenSupported() public view {
-        assertTrue(protocolF.isCollateralTokenSupported(address(token1)));
-        assertTrue(protocolF.isCollateralTokenSupported(address(token2)));
-        assertFalse(protocolF.isCollateralTokenSupported(address(token3)));
-        assertFalse(protocolF.isCollateralTokenSupported(address(0x999)));
+        assertTrue(gettersF.isCollateralTokenSupported(address(token1)));
+        assertTrue(gettersF.isCollateralTokenSupported(address(token2)));
+        assertFalse(gettersF.isCollateralTokenSupported(address(token3)));
+        assertFalse(gettersF.isCollateralTokenSupported(address(0x999)));
     }
 
     function testGetAllCollateralTokens() public view {
-        address[] memory tokens = protocolF.getAllCollateralTokens();
+        address[] memory tokens = gettersF.getAllCollateralTokens();
 
         assertEq(tokens.length, 3);
         assertTrue(tokens[0] == address(token1) || tokens[1] == address(token1));
@@ -1318,13 +1318,13 @@ contract ProtocolTest is Base {
         // Add a new token
         protocolF.addCollateralToken(address(token3), pricefeed3, baseTokenLTV);
 
-        address[] memory tokens = protocolF.getAllCollateralTokens();
+        address[] memory tokens = gettersF.getAllCollateralTokens();
         assertEq(tokens.length, 4);
 
         // Remove a token
         protocolF.removeCollateralToken(address(token1));
 
-        tokens = protocolF.getAllCollateralTokens();
+        tokens = gettersF.getAllCollateralTokens();
         assertEq(tokens.length, 3);
 
         // Verify token1 is not in the array
@@ -1337,7 +1337,7 @@ contract ProtocolTest is Base {
         uint256 depositAmount = 1000 * 1e18;
 
         // Initially should be 0
-        assertEq(protocolF.getPositionCollateral(1, address(token1)), 0);
+        assertEq(gettersF.getPositionCollateral(1, address(token1)), 0);
 
         // Deposit some collateral
         token1.mint(user1, depositAmount);
@@ -1347,11 +1347,11 @@ contract ProtocolTest is Base {
         vm.stopPrank();
 
         // Should now return the deposited amount
-        assertEq(protocolF.getPositionCollateral(1, address(token1)), depositAmount);
+        assertEq(gettersF.getPositionCollateral(1, address(token1)), depositAmount);
 
         // Other tokens should still be 0
-        assertEq(protocolF.getPositionCollateral(1, address(token2)), 0);
-        assertEq(protocolF.getPositionCollateral(2, address(token1)), 0);
+        assertEq(gettersF.getPositionCollateral(1, address(token2)), 0);
+        assertEq(gettersF.getPositionCollateral(2, address(token1)), 0);
     }
 
     function testMultipleUsersAndTokens() public {
@@ -1382,10 +1382,10 @@ contract ProtocolTest is Base {
         uint256 user2PositionId = positionManagerF.getPositionIdForUser(user2);
 
         // Verify individual collateral amounts
-        assertEq(protocolF.getPositionCollateral(user1PositionId, address(token1)), user1Amount);
-        assertEq(protocolF.getPositionCollateral(user1PositionId, address(token2)), user1Amount / 2);
-        assertEq(protocolF.getPositionCollateral(user2PositionId, address(token1)), user2Amount);
-        assertEq(protocolF.getPositionCollateral(user2PositionId, address(token2)), 0);
+        assertEq(gettersF.getPositionCollateral(user1PositionId, address(token1)), user1Amount);
+        assertEq(gettersF.getPositionCollateral(user1PositionId, address(token2)), user1Amount / 2);
+        assertEq(gettersF.getPositionCollateral(user2PositionId, address(token1)), user2Amount);
+        assertEq(gettersF.getPositionCollateral(user2PositionId, address(token2)), 0);
     }
 
     function testGetPositionCollateralValue() public {
@@ -1418,7 +1418,7 @@ contract ProtocolTest is Base {
         // Total = $7000
         uint256 expectedValue = 7000 * 1e18; // the value is returned with 18 decimals
 
-        uint256 collateralValue = protocolF.getPositionCollateralValue(positionId);
+        uint256 collateralValue = gettersF.getPositionCollateralValue(positionId);
         assertEq(collateralValue, expectedValue);
     }
 
@@ -1455,7 +1455,7 @@ contract ProtocolTest is Base {
         // Total = $4400
         uint256 expectedValue = 4400 * 1e18; // the value is returned with 18 decimals
 
-        uint256 collateralValue = protocolF.getPositionBorrowableCollateralValue(positionId);
+        uint256 collateralValue = gettersF.getPositionBorrowableCollateralValue(positionId);
         assertEq(collateralValue, expectedValue);
     }
 
@@ -1497,8 +1497,8 @@ contract ProtocolTest is Base {
         // Total = $4400
         uint256 expectedValue = 4400 * 1e18;
 
-        assertEq((expectedValue - borrowValue), protocolF.getPositionBorrowableCollateralValue(positionId));
-        assertEq(expectedValue, protocolF.getPositionUtilizableCollateralValue(positionId));
+        assertEq((expectedValue - borrowValue), gettersF.getPositionBorrowableCollateralValue(positionId));
+        assertEq(expectedValue, gettersF.getPositionUtilizableCollateralValue(positionId));
     }
 
     function testGetUserActiveLoanIds() public {
@@ -1514,7 +1514,7 @@ contract ProtocolTest is Base {
         uint256 loanId2 = protocolF.takeLoan(address(token4), borrowAmount2, 365 days);
         vm.stopPrank();
 
-        uint256[] memory activeLoanIds = protocolF.getUserActiveLoanIds(_positionId);
+        uint256[] memory activeLoanIds = gettersF.getUserActiveLoanIds(_positionId);
 
         assertEq(activeLoanIds.length, 2, "User should have 2 active loans");
         assertEq(activeLoanIds[0], loanId1, "First loan ID should match");
@@ -1546,7 +1546,7 @@ contract ProtocolTest is Base {
         protocolF.repayLoan(loanId4, borrowAmount2);
         vm.stopPrank();
 
-        uint256[] memory activeLoanIds = protocolF.getActiveLoanIds();
+        uint256[] memory activeLoanIds = gettersF.getActiveLoanIds();
 
         assertEq(activeLoanIds.length, 3, "should have 3 active loans");
         assertEq(activeLoanIds[0], loanId2, "First loan ID should match");
@@ -1580,7 +1580,7 @@ contract ProtocolTest is Base {
             uint16 annualRateBps,
             uint16 penaltyRateBps,
             uint8 status
-        ) = protocolF.getLoanDetails(loanId);
+        ) = gettersF.getLoanDetails(loanId);
 
         assertEq(positionId, 2, "Position ID should match");
         assertEq(token, address(token4), "Loan token address should match");

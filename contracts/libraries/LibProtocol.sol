@@ -156,7 +156,7 @@ library LibProtocol {
         );
         return _loanId;
     }
-    
+
     function _verifyBorrowSignature(
         LibAppStorage.StorageLayout storage s,
         BorrowRequest calldata _request,
@@ -418,9 +418,11 @@ library LibProtocol {
         returns (uint256)
     {
         uint256 _totalValue = _getPositionUtilizableCollateralValue(s, _positionId);
-        uint256 remainingCollateral =
-            _totalValue - _getPositionBorrowedValue(s, _positionId) - _totalActiveDebt(s, _positionId);
-        return remainingCollateral;
+        uint256 _debt = _getPositionBorrowedValue(s, _positionId) + _totalActiveDebt(s, _positionId);
+        if (_debt >= _totalValue) {
+            return 0;
+        }
+        return _totalValue - _debt;
     }
 
     function _getPositionUtilizableCollateralValue(LibAppStorage.StorageLayout storage s, uint256 _positionId)
@@ -464,21 +466,6 @@ library LibProtocol {
         }
         return _totalValue;
     }
-
-    // function _getHealthFactor(LibAppStorage.StorageLayout storage s, uint256 _positionId, uint256 _currentBorrowValue)
-    //     internal
-    //     view
-    //     returns (uint256)
-    // {
-    //     uint256 _collateralValue = _getPositionUtilizableCollateralValue(s, _positionId);
-    //     uint256 _borrowedValue = _getPositionBorrowedValue(s, _positionId);
-
-    //     _borrowedValue += _currentBorrowValue;
-
-    //     if (_borrowedValue == 0) return (_collateralValue * Constants.PRECISION); // No debt means max health factor
-
-    //     return _collateralValue * Constants.PRECISION / _borrowedValue; // Health factor with 18 decimals
-    // }
 
     function _getHealthFactor(LibAppStorage.StorageLayout storage s, uint256 _positionId, uint256 _currentBorrowValue)
         internal
@@ -539,7 +526,6 @@ library LibProtocol {
     }
 
     function _outstandingBalance(Loan memory _loan, uint256 _timestamp) internal pure returns (uint256) {
-        // Loan memory _loan = s.s_loans[_loanId];
         if (_loan.status != LoanStatus.FULFILLED) return 0;
 
         uint256 _timeElapsed = _timestamp - _loan.startTimestamp;
