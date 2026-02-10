@@ -160,6 +160,6 @@ library LibVaultManager {
     {
         TokenVault _tokenVault = s.i_tokenVault[asset];
         if (address(_tokenVault) == address(0)) revert TOKEN_NOT_SUPPORTED(asset);
-        return IERC20(asset).balanceOf(address(this));
+        return IERC20(asset).balanceOf(address(_tokenVault));
     }
 }

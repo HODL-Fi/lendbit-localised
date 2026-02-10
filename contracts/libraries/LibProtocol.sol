@@ -333,8 +333,11 @@ library LibProtocol {
         returns (uint256)
     {
         uint256 _totalValue = _getPositionUtilizableCollateralValue(s, _positionId);
-        uint256 remainingCollateral =
-            _totalValue - _getPositionBorrowedValue(s, _positionId) - _totalActiveDebt(s, _positionId);
+        uint256 _debt = _getPositionBorrowedValue(s, _positionId) + _totalActiveDebt(s, _positionId);
+        if (_debt >= _totalValue) {
+            return 0;
+        }
+        uint256 remainingCollateral = _totalValue - _debt;
         return remainingCollateral;
     }
 
@@ -379,21 +382,6 @@ library LibProtocol {
         }
         return _totalValue;
     }
-
-    // function _getHealthFactor(LibAppStorage.StorageLayout storage s, uint256 _positionId, uint256 _currentBorrowValue)
-    //     internal
-    //     view
-    //     returns (uint256)
-    // {
-    //     uint256 _collateralValue = _getPositionUtilizableCollateralValue(s, _positionId);
-    //     uint256 _borrowedValue = _getPositionBorrowedValue(s, _positionId);
-
-    //     _borrowedValue += _currentBorrowValue;
-
-    //     if (_borrowedValue == 0) return (_collateralValue * Constants.PRECISION); // No debt means max health factor
-
-    //     return _collateralValue * Constants.PRECISION / _borrowedValue; // Health factor with 18 decimals
-    // }
 
     function _getHealthFactor(LibAppStorage.StorageLayout storage s, uint256 _positionId, uint256 _currentBorrowValue)
         internal
@@ -460,7 +448,7 @@ library LibProtocol {
         if (_timeElapsed > _loan.tenureSeconds) {
             _timeElapsed = _loan.tenureSeconds;
         }
-
+ 
         uint256 _interest =
             (_loan.outstanding * _loan.annualRateBps * _timeElapsed) / (Constants.BASIS_POINTS_SCALE_256 * 365 days);
         uint256 _totalOwed = _loan.outstanding + _interest;

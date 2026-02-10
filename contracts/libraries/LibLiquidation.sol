@@ -35,19 +35,27 @@ library LibLiquidation {
         if (_loan.status != LoanStatus.FULFILLED) revert INACTIVE_LOAN();
         _liquidationCheck(s, _loan.positionId, _loan.token, _collateralToken, _amount);
 
-        uint256 _amountToLiquidate = _getAmountToLiquidate(s, _loan.positionId, _collateralToken, _loan.token, _amount);
+        uint256 _amountToLiquidate = _getAmountToLiquidate(s, _collateralToken, _loan.token, _amount);
+        if (_amountToLiquidate > s.s_positionCollateral[_loan.positionId][_collateralToken]) {
+            revert INSUFFICIENT_COLLATERAL();
+        }
 
         s.s_positionCollateral[_loan.positionId][_collateralToken] -= _amountToLiquidate;
         LibYieldStrategy._rebalancePosition(s, _loan.positionId, _collateralToken);
         LibYieldStrategy._ensureSufficientIdle(s, _loan.positionId, _collateralToken, _amountToLiquidate);
 
         // Update loan repaid amount
-        _loan.repaid += _amount;
-
         uint256 _loanDebt = s._outstandingBalance(_loanId, block.timestamp);
 
+        if (_amount > _loanDebt) {
+            _amount = _loanDebt;
+        }
+
+        _loan.repaid += _amount;
+        _loan.outstanding = _loanDebt - _amount;
+
         // If fully repaid, update loan status and move to closed loans
-        if (_loanDebt == 0) {
+        if (_loan.outstanding == 0) {
             _loan.status = LoanStatus.LIQUIDATED;
             s._removeLoanFromActive(_loan.positionId, _loanId);
             s.s_positionClosedLoanIds[_loan.positionId].push(_loanId);
@@ -77,19 +85,17 @@ library LibLiquidation {
         }
         _liquidationCheck(s, _positionId, _token, _collateralToken, _amount);
 
-        uint256 _amountToLiquidate = _getAmountToLiquidate(s, _positionId, _collateralToken, _token, _amount);
+        uint256 _amountToLiquidate = _getAmountToLiquidate(s, _collateralToken, _token, _amount);
+        if (_amountToLiquidate > s.s_positionCollateral[_positionId][_collateralToken]) {
+            revert INSUFFICIENT_COLLATERAL();
+        }
 
         s.s_positionCollateral[_positionId][_collateralToken] -= _amountToLiquidate;
         LibYieldStrategy._rebalancePosition(s, _positionId, _collateralToken);
         LibYieldStrategy._ensureSufficientIdle(s, _positionId, _collateralToken, _amountToLiquidate);
 
-        RepayStateChangeParams memory _params = RepayStateChangeParams({
-            positionId: _positionId,
-            token: _token,
-            amount: (_amount
-                    * ((Constants.BASIS_POINTS_SCALE - s.s_tokenVaultConfig[_token].liquidationBonus)
-                        / Constants.BASIS_POINTS_SCALE))
-        });
+        RepayStateChangeParams memory _params =
+            RepayStateChangeParams({positionId: _positionId, token: _token, amount: _amount});
         s._repayStateChanges(_params);
 
         ERC20 _tokenI = ERC20(_token);
@@ -117,27 +123,24 @@ library LibLiquidation {
 
     function _getAmountToLiquidate(
         LibAppStorage.StorageLayout storage s,
-        uint256 _positionId,
         address _collateralToken,
         address _token,
         uint256 _amount
     ) internal view returns (uint256) {
-        uint256 _collateralAmount = s.s_positionCollateral[_positionId][_collateralToken];
-        (uint256 _collateralPricePerToken, uint256 _collateralValue) =
-            s._getTokenValueInUSD(_collateralToken, _collateralAmount);
+        (, uint256 _collateralPricePerToken) = s._getPriceData(_collateralToken);
         (uint256 _liquidationTokenprice, uint256 _amountValue) = s._getTokenValueInUSD(_token, _amount);
 
-        if (_collateralValue < _amountValue) {
-            _amountValue = _collateralValue;
-            _amount = LibUtils._convertUSDToTokenAmount(
-                _token, _amountValue, _liquidationTokenprice, s._getPriceDecimals(_token)
-            );
-        }
+        _amount = LibUtils._convertUSDToTokenAmount(
+            _token, _amountValue, _liquidationTokenprice, s._getPriceDecimals(_token)
+        );
 
         uint8 _pricefeedDecimals = s._getPriceDecimals(_collateralToken);
         uint256 _amountToLiquidate = LibUtils._convertUSDToTokenAmount(
-            _collateralToken, _collateralValue, _collateralPricePerToken, _pricefeedDecimals
+            _collateralToken, _amountValue, _collateralPricePerToken, _pricefeedDecimals
         );
+        _amountToLiquidate = _amountToLiquidate
+            * ((Constants.BASIS_POINTS_SCALE + s.s_tokenVaultConfig[_token].liquidationBonus)
+                / Constants.BASIS_POINTS_SCALE);
         return _amountToLiquidate;
     }
 }

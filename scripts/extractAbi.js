@@ -8,6 +8,7 @@ const filenames = [
     "VaultManagerFacet",
     "PriceOracleFacet",
     "LiquidationFacet",
+    "GettersFacet",
 ];
 
 async function extractAbi() {

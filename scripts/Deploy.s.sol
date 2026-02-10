@@ -13,6 +13,7 @@ import "../contracts/facets/PriceOracleFacet.sol";
 import "../contracts/facets/ProtocolFacet.sol";
 import "../contracts/facets/PositionManagerFacet.sol";
 import "../contracts/facets/VaultManagerFacet.sol";
+import "../contracts/facets/GettersFacet.sol";
 import "../contracts/Diamond.sol";
 
 import {console} from "forge-std/console.sol";
@@ -29,6 +30,7 @@ contract Deployment is Script, IDiamondCut {
     VaultManagerFacet vaultManagerF;
     PriceOracleFacet priceOracleF;
     LiquidationFacet liquidationF;
+    GettersFacet gettersF;
 
     // Test tokens
     address token1;
@@ -42,7 +44,6 @@ contract Deployment is Script, IDiamondCut {
     address pricefeed4;
     address pricefeed5;
 
-
     VaultConfiguration defaultConfig = VaultConfiguration({
         totalDeposits: 0,
         totalBorrows: 0,
@@ -50,7 +51,7 @@ contract Deployment is Script, IDiamondCut {
         slopeRate: 1500,
         reserveFactor: 2000,
         optimalUtilization: 7500,
-        liquidationBonus: 1000,
+        liquidationBonus: 500,
         lastUpdated: block.timestamp
     });
 
@@ -66,6 +67,7 @@ contract Deployment is Script, IDiamondCut {
         vaultManagerF = new VaultManagerFacet();
         priceOracleF = new PriceOracleFacet();
         liquidationF = new LiquidationFacet();
+        gettersF = new GettersFacet();
 
         console.log("Deployed Addresses:");
         console.log("DiamondCutFacet: ", address(dCutFacet));
@@ -76,73 +78,74 @@ contract Deployment is Script, IDiamondCut {
         console.log("PositionManagerFacet: ", address(positionManagerF));
         console.log("VaultManagerFacet: ", address(vaultManagerF));
         console.log("PriceOracleFacet: ", address(priceOracleF));
-        console.log("LiquidationFacet: ", address(liquidationF));   
+        console.log("LiquidationFacet: ", address(liquidationF));
+        console.log("GettersFacet: ", address(gettersF));
 
         //upgrade diamond with facets
         //build cut struct
-        FacetCut[] memory cut = new FacetCut[](7);
+        FacetCut[] memory cut = new FacetCut[](8);
 
-        cut[0] = (
-            FacetCut({
+        cut[0] =
+        (FacetCut({
                 facetAddress: address(dLoupe),
                 action: FacetCutAction.Add,
                 functionSelectors: generateSelectors("DiamondLoupeFacet")
-            })
-        );
+            }));
 
-        cut[1] = (
-            FacetCut({
+        cut[1] =
+        (FacetCut({
                 facetAddress: address(ownerF),
                 action: FacetCutAction.Add,
                 functionSelectors: generateSelectors("OwnershipFacet")
-            })
-        );
+            }));
 
-        cut[2] = (
-            FacetCut({
+        cut[2] =
+        (FacetCut({
                 facetAddress: address(protocolF),
                 action: FacetCutAction.Add,
                 functionSelectors: generateSelectors("ProtocolFacet")
-            })
-        );
+            }));
 
-        cut[3] = (
-            FacetCut({
+        cut[3] =
+        (FacetCut({
                 facetAddress: address(positionManagerF),
                 action: FacetCutAction.Add,
                 functionSelectors: generateSelectors("PositionManagerFacet")
-            })
-        );
+            }));
 
-        cut[4] = (
-            FacetCut({
+        cut[4] =
+        (FacetCut({
                 facetAddress: address(vaultManagerF),
                 action: FacetCutAction.Add,
                 functionSelectors: generateSelectors("VaultManagerFacet")
-            })
-        );
+            }));
 
-        cut[5] = (
-            FacetCut({
+        cut[5] =
+        (FacetCut({
                 facetAddress: address(priceOracleF),
                 action: FacetCutAction.Add,
                 functionSelectors: generateSelectors("PriceOracleFacet")
-            })
-        );
+            }));
 
-        cut[6] = (
-            FacetCut({
+        cut[6] =
+        (FacetCut({
                 facetAddress: address(liquidationF),
                 action: FacetCutAction.Add,
                 functionSelectors: generateSelectors("LiquidationFacet")
-            })
-        );
+            }));
+        cut[7] =
+        (FacetCut({
+                facetAddress: address(gettersF),
+                action: FacetCutAction.Add,
+                functionSelectors: generateSelectors("GettersFacet")
+            }));
 
         protocolF = ProtocolFacet(address(diamond));
         positionManagerF = PositionManagerFacet(address(diamond));
         vaultManagerF = VaultManagerFacet(address(diamond));
         priceOracleF = PriceOracleFacet(address(diamond));
         liquidationF = LiquidationFacet(address(diamond));
+        gettersF = GettersFacet(address(diamond));
 
         //upgrade diamond
         IDiamondCut(address(diamond)).diamondCut(cut, address(0x0), "");

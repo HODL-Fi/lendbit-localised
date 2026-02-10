@@ -18,6 +18,7 @@ error AMOUNT_ZERO();
 error AMOUNT_MISMATCH(uint256 given, uint256 expected);
 error TRANSFER_FAILED();
 error INSUFFICIENT_ALLOWANCE();
+error INSUFFICIENT_COLLATERAL();
 error INSUFFICIENT_BALANCE();
 error HEALTH_FACTOR_TOO_LOW(uint256 healthFactor);
 error NOT_LIQUIDATABLE();
