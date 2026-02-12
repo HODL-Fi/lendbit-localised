@@ -128,12 +128,9 @@ library LibLiquidation {
         uint256 _amount
     ) internal view returns (uint256) {
         (, uint256 _collateralPricePerToken) = s._getPriceData(_collateralToken);
+        if (_collateralPricePerToken == 0) revert ZERO_PRICE_DATA();
 
         (uint256 _liquidationTokenprice, uint256 _amountValue) = s._getTokenValueInUSD(_token, _amount);
-
-        _amount = LibUtils._convertUSDToTokenAmount(
-            _token, _amountValue, _liquidationTokenprice, s._getPriceDecimals(_token)
-        );
 
         uint8 _pricefeedDecimals = s._getPriceDecimals(_collateralToken);
 
@@ -141,9 +138,9 @@ library LibLiquidation {
             _collateralToken, _amountValue, _collateralPricePerToken, _pricefeedDecimals
         );
 
-        _amountToLiquidate = _amountToLiquidate
-            * ((Constants.BASIS_POINTS_SCALE + s.s_tokenVaultConfig[_token].liquidationBonus)
-                / Constants.BASIS_POINTS_SCALE);
+        _amountToLiquidate =
+            (_amountToLiquidate * (Constants.BASIS_POINTS_SCALE + s.s_tokenVaultConfig[_token].liquidationBonus))
+                / Constants.BASIS_POINTS_SCALE;
 
         return _amountToLiquidate;
     }

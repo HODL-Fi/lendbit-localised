@@ -44,6 +44,7 @@ error CURRENCY_NOT_SUPPORTED(string currency);
 
 error STALE_PRICE_FEED(address priceFeed);
 error INVALID_PRICE_FEED(address priceFeed);
+error ZERO_PRICE_DATA();
 
 error YIELD_ALLOCATION_TOO_HIGH(uint16 bps);
 error YIELD_NOT_ENABLED(address token);

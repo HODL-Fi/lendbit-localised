@@ -1584,11 +1584,11 @@ contract ProtocolTest is Base {
 
         assertEq(positionId, 2, "Position ID should match");
         assertEq(token, address(token4), "Loan token address should match");
-        assertEq(principal, borrowAmount, "Principal amount should match");
+        assertEq(principal, borrowAmount / 2, "Principal amount should match"); // if loan is not fully repaid principal would be the amount loan is calculated by
         assertEq(
             debt,
-            (borrowAmount * 20 / 100) + (borrowAmount / 2),
-            "debt amount should have increased by 20% of principal"
+            (borrowAmount * 20 / 200) + (borrowAmount / 2),
+            "debt amount should have increased by 20% of principal minus repaid"
         );
         assertEq(repaid, borrowAmount / 2, "Repaid amount should match");
         assertEq(startTimestamp, (block.timestamp - 365 days), "Start time should match");

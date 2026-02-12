@@ -396,35 +396,25 @@ contract LiquidationTest is Base {
 
     function testGetAmountToLiquidate() public {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
-
         uint256 _positionId = 1;
-
         address _collateralToken = address(token1);
-
         address _debtToken = address(token3);
-
         uint256 _amount = 1000e6;
 
         s.s_supportedCollateralTokens[_collateralToken] = true;
-
         s.s_supportedToken[_debtToken] = true;
-
         s.s_tokenPriceFeed[_collateralToken] = pricefeed1;
-
         s.s_tokenPriceFeed[_debtToken] = pricefeed3;
-
         s.s_positionCollateral[_positionId][_collateralToken] = 4 ether;
-
         s.s_supportedCollateralTokens[_debtToken] = true;
-
         s.s_positionCollateral[_positionId][_debtToken] = 4 ether;
+        s.s_tokenVaultConfig[address(_debtToken)] = defaultConfig;
+        s.s_tokenVaultConfig[address(_collateralToken)] = defaultConfig;
 
         uint256 _amountToLiquidate = LibLiquidation._getAmountToLiquidate(s, _debtToken, _debtToken, _amount);
-
         uint256 _amountToLiquidate2 = LibLiquidation._getAmountToLiquidate(s, _collateralToken, _debtToken, _amount);
 
-        assertEq(_amountToLiquidate, _amount);
-
-        assertEq(_amountToLiquidate2, _amount); // 666666666666666666
+        assertEq(_amountToLiquidate, (_amount * 110 / 100));
+        assertEq(_amountToLiquidate2, 733333333333333332); // 0.6666... token 1 == $1000 + 10% (0.0666...) -> 0.7333...
     }
 }

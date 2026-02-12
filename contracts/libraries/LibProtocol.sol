@@ -93,6 +93,7 @@ library LibProtocol {
         uint256 _loanId = ++s.s_nextLoanId;
         s.s_loans[_loanId] = _loan;
         s.s_positionActiveLoanIds[_positionId].push(_loanId);
+        s.s_loanPrincipal[_loanId] = _principal;
 
         s._updateVaultBorrows(_loan.token, _loan.principal);
 
@@ -207,9 +208,10 @@ library LibProtocol {
 
         // Update loan repaid amount
         _loan.repaid += _amount;
+        _loan.principal = _loanDebt - _amount;
 
         // If fully repaid, update loan status and move to closed loans
-        if (_loanDebt - _amount == 0) {
+        if (_loan.principal == 0) {
             _loan.status = LoanStatus.REPAID;
             _removeLoanFromActive(s, _positionId, _loanId);
             s.s_positionClosedLoanIds[_positionId].push(_loanId);
@@ -221,7 +223,7 @@ library LibProtocol {
         if (!_success) revert TRANSFER_FAILED();
 
         emit LoanRepayment(_positionId, _loanId, _loan.token, _amount);
-        return _loanDebt - _amount;
+        return _loan.principal;
     }
 
     function _repayLoan(LibAppStorage.StorageLayout storage s, uint256 _loanId, uint256 _amount)
@@ -548,7 +550,7 @@ library LibProtocol {
             return 0;
         }
 
-        return _totalOwed - _loan.repaid;
+        return _totalOwed;
     }
 
     function _outstandingBalance(LibAppStorage.StorageLayout storage s, uint256 _loanId, uint256 _timestamp)
@@ -632,7 +634,7 @@ library LibProtocol {
         return (
             loan.positionId,
             loan.token,
-            loan.principal,
+            loan.principal == 0 ? s.s_loanPrincipal[_loanId] : loan.principal,
             loan.repaid,
             loan.tenureSeconds,
             loan.startTimestamp,

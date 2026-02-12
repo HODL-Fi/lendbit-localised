@@ -54,7 +54,6 @@ library LibAppStorage {
         address s_requestBorrowSigner;
         mapping(address => mapping(uint256 => bool)) s_requestBorrowNonceUsed;
 
-
         // Chainlink functions variables
         uint32 s_gasLimit;
         uint64 s_subscriptionId;
@@ -65,6 +64,7 @@ library LibAppStorage {
         string s_source;
         address s_router;
         mapping(bytes32 _requestId => FunctionResponse) s_functionResponse;
+        mapping(uint256 => uint256) s_loanPrincipal;
     }
 
     bytes32 internal constant STORAGE_SLOT = keccak256("contracts.storage.LibAppStorage");
