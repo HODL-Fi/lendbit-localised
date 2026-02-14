@@ -2,7 +2,6 @@
 pragma solidity ^0.8.30;
 
 import {LibAppStorage} from "../libraries/LibAppStorage.sol";
-import {LibDiamond} from "../libraries/LibDiamond.sol";
 import {LibProtocol} from "../libraries/LibProtocol.sol";
 
 contract GettersFacet {

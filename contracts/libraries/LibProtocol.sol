@@ -94,6 +94,7 @@ library LibProtocol {
         s.s_loans[_loanId] = _loan;
         s.s_positionActiveLoanIds[_positionId].push(_loanId);
         s.s_loanPrincipal[_loanId] = _principal;
+        s.s_loanStartTime[_loanId] = block.timestamp;
 
         s._updateVaultBorrows(_loan.token, _loan.principal);
 
@@ -209,6 +210,7 @@ library LibProtocol {
         // Update loan repaid amount
         _loan.repaid += _amount;
         _loan.principal = _loanDebt - _amount;
+        _loan.startTimestamp = block.timestamp;
 
         // If fully repaid, update loan status and move to closed loans
         if (_loan.principal == 0) {
@@ -546,10 +548,6 @@ library LibProtocol {
             _totalOwed += penalty;
         }
 
-        if (_totalOwed <= _loan.repaid) {
-            return 0;
-        }
-
         return _totalOwed;
     }
 
@@ -637,7 +635,7 @@ library LibProtocol {
             loan.principal == 0 ? s.s_loanPrincipal[_loanId] : loan.principal,
             loan.repaid,
             loan.tenureSeconds,
-            loan.startTimestamp,
+            s.s_loanStartTime[_loanId],
             _outstandingBalance(loan, block.timestamp),
             loan.annualRateBps,
             loan.penaltyRateBps,

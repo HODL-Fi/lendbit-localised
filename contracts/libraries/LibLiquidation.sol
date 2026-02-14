@@ -51,11 +51,13 @@ library LibLiquidation {
             _amount = _loanDebt;
         }
 
-        _loan.repaid += _amount;
         // update outstanding loan here
+        _loan.repaid += _amount;
+        _loan.principal = _loanDebt - _amount;
+        _loan.startTimestamp = block.timestamp;
 
         // If fully repaid, update loan status and move to closed loans
-        if (_loanDebt == 0) {
+        if (_loan.principal == 0) {
             _loan.status = LoanStatus.LIQUIDATED;
             s._removeLoanFromActive(_loan.positionId, _loanId);
             s.s_positionClosedLoanIds[_loan.positionId].push(_loanId);
@@ -130,7 +132,7 @@ library LibLiquidation {
         (, uint256 _collateralPricePerToken) = s._getPriceData(_collateralToken);
         if (_collateralPricePerToken == 0) revert ZERO_PRICE_DATA();
 
-        (uint256 _liquidationTokenprice, uint256 _amountValue) = s._getTokenValueInUSD(_token, _amount);
+        (, uint256 _amountValue) = s._getTokenValueInUSD(_token, _amount);
 
         uint8 _pricefeedDecimals = s._getPriceDecimals(_collateralToken);
 

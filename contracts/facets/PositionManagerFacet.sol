@@ -42,8 +42,6 @@ contract PositionManagerFacet {
         s.s_requestBorrowSigner = _signer;
     }
 
-    
-
     // Getter functions
 
     function getNextPositionId() external view returns (uint256) {
@@ -57,16 +55,19 @@ contract PositionManagerFacet {
     function getUserForPositionId(uint256 _positionId) external view returns (address) {
         return LibPositionManager._getUserForPositionId(LibAppStorage.appStorage(), _positionId);
     }
-    
+
     function getRequestBorrowSigner() external view returns (address) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return s.s_requestBorrowSigner;
     }
 
-
     // Modifiers
     modifier onlySecurityCouncil() {
-        if (msg.sender != LibDiamond.contractOwner()) revert ONLY_SECURITY_COUNCIL();
+        _onlySecurityCouncil();
         _;
+    }
+
+    function _onlySecurityCouncil() internal {
+        if (msg.sender != LibDiamond.contractOwner()) revert ONLY_SECURITY_COUNCIL();
     }
 }

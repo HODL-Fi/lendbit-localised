@@ -3,7 +3,6 @@ pragma solidity ^0.8.30;
 
 import {ERC20Mock} from "@chainlink/contracts/src/v0.8/shared/mocks/ERC20Mock.sol";
 
-import {YieldStrategyFacet} from "../contracts/facets/YieldStrategyFacet.sol";
 import {MockAavePool} from "../contracts/mocks/MockAavePool.sol";
 import {YieldPosition} from "../contracts/models/Yield.sol";
 import {Base} from "./Base.t.sol";
