@@ -21,6 +21,7 @@ error REQUEST_BORROW_TARGET_CHAIN_MISMATCH(uint256 expected, uint256 provided);
 error REQUEST_BORROW_CONTRACT_MISMATCH(address expected, address provided);
 
 error AMOUNT_ZERO();
+error BAD_RATE();
 error AMOUNT_MISMATCH(uint256 given, uint256 expected);
 error TRANSFER_FAILED();
 error INSUFFICIENT_ALLOWANCE();

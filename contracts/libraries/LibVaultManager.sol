@@ -101,6 +101,51 @@ library LibVaultManager {
         return address(_tokenVault);
     }
 
+    function _setReserveFactor(LibAppStorage.StorageLayout storage s, address _token, uint16 _reserveFactor) internal {
+        if (_reserveFactor == 0) {
+            revert AMOUNT_ZERO();
+        }
+        VaultConfiguration storage _config = s.s_tokenVaultConfig[_token];
+        _config.reserveFactor = _reserveFactor;
+    }
+
+    function _setBaseRate(LibAppStorage.StorageLayout storage s, address _token, uint16 _baseRate) internal {
+        if (_baseRate == 0) {
+            revert AMOUNT_ZERO();
+        }
+        VaultConfiguration storage _config = s.s_tokenVaultConfig[_token];
+        if (_config.slopeRate < _baseRate) revert BAD_RATE();
+        _config.baseRate = _baseRate;
+    }
+
+    function _setSlopeRate(LibAppStorage.StorageLayout storage s, address _token, uint16 _slopeRate) internal {
+        if (_slopeRate == 0) {
+            revert AMOUNT_ZERO();
+        }
+        VaultConfiguration storage _config = s.s_tokenVaultConfig[_token];
+        if (_config.baseRate > _slopeRate) revert BAD_RATE();
+        _config.slopeRate = _slopeRate;
+    }
+
+    function _setOptimalUtilization(LibAppStorage.StorageLayout storage s, address _token, uint16 _optimalUtilization)
+        internal
+    {
+        if (_optimalUtilization == 0) {
+            revert AMOUNT_ZERO();
+        }
+        VaultConfiguration storage _config = s.s_tokenVaultConfig[_token];
+        if (_optimalUtilization < 5000) revert BAD_RATE();
+        _config.optimalUtilization = _optimalUtilization;
+    }
+
+    function _setLiquidationBonus(LibAppStorage.StorageLayout storage s, address _token, uint16 _liquidationBonus)
+        internal
+    {
+        VaultConfiguration storage _config = s.s_tokenVaultConfig[_token];
+        if (_liquidationBonus > 1000) revert BAD_RATE();
+        _config.liquidationBonus = _liquidationBonus;
+    }
+
     function _validateVaultUtlization(LibAppStorage.StorageLayout storage s, address _token, uint256 _amount)
         internal
         view

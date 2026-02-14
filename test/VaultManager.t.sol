@@ -198,4 +198,162 @@ contract PositionManagerTest is Base {
         token1 = new ERC20Mock(18);
         token2 = new ERC20Mock(18);
     }
+
+    // ====== Vault Config Setter Tests ======
+    function testSetReserveFactor() public {
+        address _token = address(token1);
+        uint16 newReserveFactor = 3000;
+        VaultConfiguration memory beforeConfig = vaultManagerF.getTokenVaultConfig(_token);
+        assertTrue(beforeConfig.reserveFactor != newReserveFactor);
+        vaultManagerF.setReserveFactor(_token, newReserveFactor);
+        VaultConfiguration memory afterConfig = vaultManagerF.getTokenVaultConfig(_token);
+        assertEq(afterConfig.reserveFactor, newReserveFactor);
+    }
+
+    function testSetReserveFactorRevertsOnZero() public {
+        address _token = address(token1);
+        vm.expectRevert(abi.encodeWithSelector(AMOUNT_ZERO.selector));
+        vaultManagerF.setReserveFactor(_token, 0);
+    }
+
+    function testSetReserveFactorRevertsIfNotCouncil() public {
+        address _token = address(token1);
+        vm.startPrank(linkHolder);
+        vm.expectRevert(abi.encodeWithSelector(ONLY_SECURITY_COUNCIL.selector));
+        vaultManagerF.setReserveFactor(_token, 3000);
+        vm.stopPrank();
+    }
+
+    function testSetBaseRate() public {
+        address _token = address(token1);
+        uint16 newBaseRate = 400;
+        VaultConfiguration memory beforeConfig = vaultManagerF.getTokenVaultConfig(_token);
+        assertTrue(beforeConfig.baseRate != newBaseRate);
+        vaultManagerF.setBaseRate(_token, newBaseRate);
+        VaultConfiguration memory afterConfig = vaultManagerF.getTokenVaultConfig(_token);
+        assertEq(afterConfig.baseRate, newBaseRate);
+    }
+
+    function testSetBaseRateRevertsOnZero() public {
+        address _token = address(token1);
+        vm.expectRevert(abi.encodeWithSelector(AMOUNT_ZERO.selector));
+        vaultManagerF.setBaseRate(_token, 0);
+    }
+
+    function testSetBaseRateRevertsIfSlopeLower() public {
+        address _token = address(token1);
+        // set slopeRate to 500 first
+        vaultManagerF.setSlopeRate(_token, 500);
+        vm.expectRevert(abi.encodeWithSelector(BAD_RATE.selector));
+        vaultManagerF.setBaseRate(_token, 600);
+    }
+
+    function testSetBaseRateRevertsIfNotCouncil() public {
+        address _token = address(token1);
+        vm.startPrank(linkHolder);
+        vm.expectRevert(abi.encodeWithSelector(ONLY_SECURITY_COUNCIL.selector));
+        vaultManagerF.setBaseRate(_token, 400);
+        vm.stopPrank();
+    }
+
+    function testSetSlopeRate() public {
+        address _token = address(token1);
+        uint16 newSlopeRate = 2000;
+        VaultConfiguration memory beforeConfig = vaultManagerF.getTokenVaultConfig(_token);
+        assertTrue(beforeConfig.slopeRate != newSlopeRate);
+        vaultManagerF.setSlopeRate(_token, newSlopeRate);
+        VaultConfiguration memory afterConfig = vaultManagerF.getTokenVaultConfig(_token);
+        assertEq(afterConfig.slopeRate, newSlopeRate);
+    }
+
+    function testSetSlopeRateRevertsOnZero() public {
+        address _token = address(token1);
+        vm.expectRevert(abi.encodeWithSelector(AMOUNT_ZERO.selector));
+        vaultManagerF.setSlopeRate(_token, 0);
+    }
+
+    function testSetSlopeRateRevertsIfBaseHigher() public {
+        address _token = address(token1);
+        vm.expectRevert(abi.encodeWithSelector(BAD_RATE.selector));
+        vaultManagerF.setSlopeRate(_token, 300);
+    }
+
+    function testSetSlopeRateRevertsIfNotCouncil() public {
+        address _token = address(token1);
+        vm.startPrank(linkHolder);
+        vm.expectRevert(abi.encodeWithSelector(ONLY_SECURITY_COUNCIL.selector));
+        vaultManagerF.setSlopeRate(_token, 2000);
+        vm.stopPrank();
+    }
+
+    function testSetOptimalUtilization() public {
+        address _token = address(token1);
+        uint16 newOptimalUtilization = 8000;
+        VaultConfiguration memory beforeConfig = vaultManagerF.getTokenVaultConfig(_token);
+        assertTrue(beforeConfig.optimalUtilization != newOptimalUtilization);
+        vaultManagerF.setOptimalUtilization(_token, newOptimalUtilization);
+        VaultConfiguration memory afterConfig = vaultManagerF.getTokenVaultConfig(_token);
+        assertEq(afterConfig.optimalUtilization, newOptimalUtilization);
+    }
+
+    function testSetOptimalUtilizationRevertsOnZero() public {
+        address _token = address(token1);
+        vm.expectRevert(abi.encodeWithSelector(AMOUNT_ZERO.selector));
+        vaultManagerF.setOptimalUtilization(_token, 0);
+    }
+
+    function testSetOptimalUtilizationRevertsIfTooLow() public {
+        address _token = address(token1);
+        vm.expectRevert(abi.encodeWithSelector(BAD_RATE.selector));
+        vaultManagerF.setOptimalUtilization(_token, 4000);
+    }
+
+    function testSetOptimalUtilizationRevertsIfNotCouncil() public {
+        address _token = address(token1);
+        vm.startPrank(linkHolder);
+        vm.expectRevert(abi.encodeWithSelector(ONLY_SECURITY_COUNCIL.selector));
+        vaultManagerF.setOptimalUtilization(_token, 8000);
+        vm.stopPrank();
+    }
+
+    function testSetLiquidationBonus() public {
+        address _token = address(token1);
+        uint16 newLiquidationBonus = 900;
+        VaultConfiguration memory beforeConfig = vaultManagerF.getTokenVaultConfig(_token);
+        assertTrue(beforeConfig.liquidationBonus != newLiquidationBonus);
+        vaultManagerF.setLiquidationBonus(_token, newLiquidationBonus);
+        VaultConfiguration memory afterConfig = vaultManagerF.getTokenVaultConfig(_token);
+        assertEq(afterConfig.liquidationBonus, newLiquidationBonus);
+    }
+
+    function testGetTokenVaultDetails() public {
+        address _token = address(token1);
+        (uint256 deposits, uint256 borrows) = vaultManagerF.getTokenVaultDetails(_token);
+        VaultConfiguration memory config = vaultManagerF.getTokenVaultConfig(_token);
+        assertEq(deposits, config.totalDeposits);
+        assertEq(borrows, config.totalBorrows);
+
+        // After deposit
+        uint256 depositAmount = 1000 ether;
+        token1.mint(address(this), depositAmount);
+        token1.approve(address(diamond), depositAmount);
+        vaultManagerF.deposit(_token, depositAmount);
+        (deposits, borrows) = vaultManagerF.getTokenVaultDetails(_token);
+        assertEq(deposits, depositAmount);
+        assertEq(borrows, 0);
+    }
+
+    function testSetLiquidationBonusRevertsIfTooHigh() public {
+        address _token = address(token1);
+        vm.expectRevert(abi.encodeWithSelector(BAD_RATE.selector));
+        vaultManagerF.setLiquidationBonus(_token, 2000);
+    }
+
+    function testSetLiquidationBonusRevertsIfNotCouncil() public {
+        address _token = address(token1);
+        vm.startPrank(linkHolder);
+        vm.expectRevert(abi.encodeWithSelector(ONLY_SECURITY_COUNCIL.selector));
+        vaultManagerF.setLiquidationBonus(_token, 900);
+        vm.stopPrank();
+    }
 }
