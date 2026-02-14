@@ -21,8 +21,12 @@ library LibLiquidation {
     using LibProtocol for LibAppStorage.StorageLayout;
 
     function _isLiquidatable(LibAppStorage.StorageLayout storage s, uint256 _positionId) internal view returns (bool) {
-        uint256 _healthFactor = s._getHealthFactor(_positionId, 0);
-        return _healthFactor < 1e18;
+        uint256 _collateral = s._getPositionCollateralValue(_positionId);
+        uint256 _debt = s._getPositionBorrowedValue(_positionId) + s._totalActiveDebt(_positionId);
+        uint256 _threshold = _collateral * Constants.LIQUIDATION_THRESHOLD / Constants.BASIS_POINTS_SCALE_256;
+        // uint256 _healthFactor = s._getHealthFactor(_positionId, 0);
+        // return _healthFactor < 1e18;
+        return _debt > _threshold;
     }
 
     function _liquidateLoan(

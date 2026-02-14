@@ -67,7 +67,7 @@ contract PositionManagerFacet {
         _;
     }
 
-    function _onlySecurityCouncil() internal {
+    function _onlySecurityCouncil() internal view {
         if (msg.sender != LibDiamond.contractOwner()) revert ONLY_SECURITY_COUNCIL();
     }
 }

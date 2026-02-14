@@ -23,13 +23,14 @@ contract LiquidationTest is Base {
 
         vm.startPrank(user1);
         protocolF.borrow(address(token4), _borrowAmount);
+        protocolF.takeLoan(address(token4), _borrowAmount / 2, 30 days);
         vm.stopPrank();
 
         bool _isLiquidatable = liquidationF.isLiquidatable(_positionId);
         assertFalse(_isLiquidatable, "user should not be liquidatable");
 
-        MockV3Aggregator _pricefeed4 = MockV3Aggregator(pricefeed4);
-        _pricefeed4.updateAnswer(1000e8); // $1.5/token
+        MockV3Aggregator _pricefeed1 = MockV3Aggregator(pricefeed1);
+        _pricefeed1.updateAnswer(1000e8); // collateral price drop @ $4000
 
         _isLiquidatable = liquidationF.isLiquidatable(_positionId);
         uint256 _healthFactor = gettersF.getHealthFactor(_positionId, 0);
@@ -50,7 +51,7 @@ contract LiquidationTest is Base {
         uint256 _debt = gettersF.getBorrowDetails(_positionId, address(token4));
 
         // Make position liquidatable
-        MockV3Aggregator(pricefeed1).updateAnswer(1200e8);
+        MockV3Aggregator(pricefeed1).updateAnswer(1110e8);
 
         assertTrue(liquidationF.isLiquidatable(_positionId));
 
@@ -91,7 +92,7 @@ contract LiquidationTest is Base {
         vm.warp(block.timestamp + 365 days);
 
         // Make position liquidatable
-        MockV3Aggregator(pricefeed1).updateAnswer(1200e8);
+        MockV3Aggregator(pricefeed1).updateAnswer(1110e8);
 
         assertTrue(liquidationF.isLiquidatable(_positionId));
 
@@ -254,7 +255,7 @@ contract LiquidationTest is Base {
         uint256 _debt = gettersF.getOutstandingDebtForLoan(_loanId); // 24e6 token4 @ $250 -> $6000
 
         // Make position liquidatable
-        MockV3Aggregator(pricefeed1).updateAnswer(1350e8); // collateral now worth $6750 within liquidation range
+        MockV3Aggregator(pricefeed1).updateAnswer(1320e8); // collateral now worth $6750 within liquidation range
         assertTrue(liquidationF.isLiquidatable(_positionId));
 
         uint256 _userCollateralBefore = gettersF.getPositionCollateral(_positionId, address(token1));
@@ -302,7 +303,7 @@ contract LiquidationTest is Base {
         uint256 _debt = gettersF.getOutstandingDebtForLoan(_loanId); // 24e6 token4 @ $250 -> $6000
 
         // Make position liquidatable
-        MockV3Aggregator(pricefeed1).updateAnswer(1350e8); // collateral now worth $6750 within liquidation range
+        MockV3Aggregator(pricefeed1).updateAnswer(1320e8); // collateral now worth $6750 within liquidation range
         assertTrue(liquidationF.isLiquidatable(_positionId));
 
         uint256 _userCollateralBefore = gettersF.getPositionCollateral(_positionId, address(token1));
@@ -352,7 +353,7 @@ contract LiquidationTest is Base {
         uint256 _debt = gettersF.getOutstandingDebtForLoan(_loanId); // 12 tokens = 12 * 250 = $3000
 
         // Make position liquidatable
-        MockV3Aggregator(pricefeed1).updateAnswer(900e8); // collateral at $3600 (4 * 900) -> liquidation zone
+        MockV3Aggregator(pricefeed1).updateAnswer(830e8); // collateral at $3600 (4 * 900) -> liquidation zone
 
         assertTrue(liquidationF.isLiquidatable(_positionId));
 
