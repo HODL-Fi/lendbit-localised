@@ -32,6 +32,15 @@ contract VaultManagerFacet {
         return s._deployVault(_token, _pricefeed, _name, _symbol, _config);
     }
 
+    function upgradeVault(address _token, VaultConfiguration memory _config)
+        external
+        onlySecurityCouncil
+        returns (address)
+    {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        return s._upgradeVault(_token, _config);
+    }
+
     // ====== Security Council Vault Config Setters ======
     function setReserveFactor(address _token, uint16 _reserveFactor) external onlySecurityCouncil {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
@@ -68,16 +77,6 @@ contract VaultManagerFacet {
         s._resumeTokenSupport(_token);
     }
 
-    function tokenIsSupported(address _token) external view returns (bool) {
-        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
-        return s._tokenIsSupported(_token);
-    }
-
-    function getTokenVault(address _token) external view returns (address) {
-        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
-        return s._getTokenVault(_token);
-    }
-
     function getTokenVaultConfig(address _token) external view returns (VaultConfiguration memory) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return s.s_tokenVaultConfig[_token];
@@ -87,11 +86,6 @@ contract VaultManagerFacet {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         VaultConfiguration memory _config = s.s_tokenVaultConfig[_token];
         return (_config.totalDeposits, _config.totalBorrows);
-    }
-
-    function getVaultTotalAssets(address asset) external view returns (uint256) {
-        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
-        return s._getVaultTotalAssets(asset);
     }
 
     modifier onlySecurityCouncil() {

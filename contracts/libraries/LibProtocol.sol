@@ -635,7 +635,7 @@ library LibProtocol {
             loan.principal == 0 ? s.s_loanPrincipal[_loanId] : loan.principal,
             loan.repaid,
             loan.tenureSeconds,
-            s.s_loanStartTime[_loanId],
+            s.s_loanStartTime[_loanId] == 0 ? loan.startTimestamp : s.s_loanStartTime[_loanId],
             _outstandingBalance(loan, block.timestamp),
             loan.annualRateBps,
             loan.penaltyRateBps,

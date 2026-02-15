@@ -124,6 +124,7 @@ contract TokenVault is ERC4626, ReentrancyGuard {
     function deposit(uint256 assets, address receiver)
         public
         override
+        onlyDiamond
         nonReentrant
         notPaused
         addressZeroCheck(receiver)
@@ -154,6 +155,7 @@ contract TokenVault is ERC4626, ReentrancyGuard {
     function withdraw(uint256 assets, address receiver, address owner)
         public
         override
+        onlyDiamond
         nonReentrant
         addressZeroCheck(receiver)
         addressZeroCheck(owner)
@@ -163,14 +165,13 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         // Calculate shares needed
         shares = convertToShares(assets);
         if (shares == 0) revert InvalidAmount();
+        // Check if owner has enough shares
+        if (balanceOf(owner) < shares) revert InsufficientShares();
 
         // Check allowance if not owner
         if (msg.sender != owner) {
             _spendAllowance(owner, msg.sender, shares);
         }
-
-        // Check if owner has enough shares
-        if (balanceOf(owner) < shares) revert InsufficientShares();
 
         // Burn shares first
         _burn(owner, shares);
