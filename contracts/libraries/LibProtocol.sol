@@ -233,8 +233,10 @@ library LibProtocol {
         }
 
         s._updateVaultRepays(_loan.token, _amount);
+        TokenVault _vault = s.i_tokenVault[_loan.token];
+        _vault.repay(_amount);
 
-        bool _success = ERC20(_loan.token).transferFrom(msg.sender, address(s.i_tokenVault[_loan.token]), _amount);
+        bool _success = ERC20(_loan.token).transferFrom(msg.sender, address(_vault), _amount);
         if (!_success) revert TRANSFER_FAILED();
 
         emit LoanRepaymentX(_positionId, _loanId, _loan.token, _amount, s.s_loanSpokeChainId[_loanId]);
@@ -297,7 +299,10 @@ library LibProtocol {
         _repayStateChanges(s, _params);
         s._updateVaultRepays(address(_token), _amount);
 
-        bool _success = ERC20(_token).transferFrom(msg.sender, address(s.i_tokenVault[_token]), _amount);
+        TokenVault _vault = s.i_tokenVault[_token];
+        _vault.repay(_amount);
+
+        bool _success = ERC20(_token).transferFrom(msg.sender, address(_vault), _amount);
         if (!_success) revert TRANSFER_FAILED();
 
         emit Repay(_positionId, _token, _amount);
@@ -308,7 +313,7 @@ library LibProtocol {
         uint256 _totalDebt = _calculateUserDebt(s, _params.positionId, _params.token, 0);
         s.s_positionBorrowed[_params.positionId][_params.token] = _totalDebt - _params.amount;
         s.s_positionBorrowedLastUpdate[_params.positionId][_params.token] = block.timestamp;
-        s._updateVaultRepays(_params.token, _params.amount);
+        // s._updateVaultRepays(_params.token, _params.amount);
     }
 
     function _allowanceAndBalanceCheck(address _token, uint256 _amount) internal view {

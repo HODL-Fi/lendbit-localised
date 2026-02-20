@@ -17,7 +17,7 @@ import "../contracts/models/Event.sol";
 
 import {TokenVault} from "../contracts/TokenVault.sol";
 
-contract PositionManagerTest is Base {
+contract VaultManagerTest is Base {
     address linkHolder = 0x4281eCF07378Ee595C564a59048801330f3084eE; //sepolia
 
     TokenVault tokenVault1;
@@ -36,7 +36,7 @@ contract PositionManagerTest is Base {
         token1.mint(address(this), _amount);
         token1.approve(address(diamond), _amount);
 
-        TokenVault tokenVault = TokenVault(payable(vaultManagerF.getTokenVault(_token)));
+        TokenVault tokenVault = TokenVault(payable(gettersF.getTokenVault(_token)));
 
         vm.expectEmit(true, true, true, true);
         emit Deposit(1, _token, _amount);
@@ -44,22 +44,22 @@ contract PositionManagerTest is Base {
 
         assertEq(token1.balanceOf(user1), 0);
         assertEq(token1.balanceOf(address(tokenVault)), _amount);
-        assertEq(ERC20Mock(vaultManagerF.getTokenVault(_token)).balanceOf(address(this)), _amount);
+        assertEq(ERC20Mock(gettersF.getTokenVault(_token)).balanceOf(address(this)), _amount);
     }
 
     function testVaultDeposit() public {
         address _token = address(token1);
         uint256 _amount = 1000 ether;
 
-        token1.mint(user1, _amount);
-        vm.startPrank(user1);
+        token1.mint(address(diamond), _amount);
+        vm.startPrank(address(diamond));
         token1.approve(address(tokenVault1), _amount);
 
         tokenVault1.deposit(_amount, user1);
 
         assertEq(token1.balanceOf(user1), 0);
         assertEq(token1.balanceOf(address(tokenVault1)), _amount);
-        assertEq(ERC20Mock(vaultManagerF.getTokenVault(_token)).balanceOf(user1), _amount);
+        assertEq(ERC20Mock(gettersF.getTokenVault(_token)).balanceOf(user1), _amount);
 
         vm.stopPrank();
     }
@@ -87,8 +87,8 @@ contract PositionManagerTest is Base {
     function testDeployVault() public {
         address _token = address(0x123);
         address _tokenVault = vaultManagerF.deployVault(_token, address(0xdead), "Test token", "TesT", defaultConfig);
-        assertTrue(vaultManagerF.tokenIsSupported(_token));
-        assertEq(_tokenVault, vaultManagerF.getTokenVault(_token));
+        assertTrue(gettersF.tokenIsSupported(_token));
+        assertEq(_tokenVault, gettersF.getTokenVault(_token));
     }
 
     function testDeploVaultEmitTokenAdded() public {
@@ -110,7 +110,7 @@ contract PositionManagerTest is Base {
         vaultManagerF.deployVault(_token, address(0xdead), "Test token", "TesT", defaultConfig);
 
         vaultManagerF.pauseTokenSupport(_token);
-        assertFalse(vaultManagerF.tokenIsSupported(_token));
+        assertFalse(gettersF.tokenIsSupported(_token));
     }
 
     function testOnlyContractOwnerCanPauseTokenSupport() public {
@@ -128,7 +128,7 @@ contract PositionManagerTest is Base {
         vaultManagerF.pauseTokenSupport(_token);
 
         vaultManagerF.resumeTokenSupport(_token);
-        assertTrue(vaultManagerF.tokenIsSupported(_token));
+        assertTrue(gettersF.tokenIsSupported(_token));
     }
 
     function testOnlyContractOwnerCanResumeTokenSupport() public {

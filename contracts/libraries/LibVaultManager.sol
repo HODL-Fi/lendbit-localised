@@ -77,7 +77,7 @@ library LibVaultManager {
             revert TOKEN_NOT_SUPPORTED(_token);
         }
 
-        TokenVault _tokenVault = new TokenVault(_token, _oldVault.name(), _oldVault.symbol(), address(this));
+        TokenVault _tokenVault = new TokenVault(_token, _oldVault.name(), _oldVault.symbol(), address(this), _config.baseRate);
         s.i_tokenVault[_token] = _tokenVault;
 
         s.s_tokenVaultConfig[_token] = VaultConfiguration({
@@ -110,7 +110,7 @@ library LibVaultManager {
             revert TOKEN_ALREADY_SUPPORTED(_token, address(s.i_tokenVault[_token]));
         }
 
-        TokenVault _tokenVault = new TokenVault(_token, _name, _symbol, address(this));
+        TokenVault _tokenVault = new TokenVault(_token, _name, _symbol, address(this), _config.baseRate);
         s.s_allSupportedTokens.push(_token);
         s.s_supportedToken[_token] = true;
         s.i_tokenVault[_token] = _tokenVault;
