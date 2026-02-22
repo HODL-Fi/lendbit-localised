@@ -42,6 +42,7 @@ event LoanTaken(
     uint16 annualRateBps
 );
 event LoanRepayment(uint256 indexed positionId, uint256 indexed loanId, address indexed token, uint256 amount);
+event LoanRepaymentX(uint256 indexed positionId, uint256 indexed loanId, address indexed token, uint256 amount, uint32 spokeChainId);
 event LoanLiquidated(
     uint256 indexed positionId,
     uint256 indexed loandId,

@@ -66,6 +66,8 @@ library LibAppStorage {
         mapping(bytes32 _requestId => FunctionResponse) s_functionResponse;
         mapping(uint256 => uint256) s_loanPrincipal;
         mapping(uint256 => uint256) s_loanStartTime;
+        mapping(uint256 => uint256) s_loanSpokeChainId;
+        mapping(uint256 => mapping(uint256 => uint256[])) s_positionSpokeActiveLoanIds; // positionId -> (spokeId -> list of active loanIds)
     }
 
     bytes32 internal constant STORAGE_SLOT = keccak256("contracts.storage.LibAppStorage");

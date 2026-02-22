@@ -146,7 +146,8 @@ library LibProtocol {
 
         uint256 _loanId = ++s.s_nextLoanId;
         s.s_loans[_loanId] = _loan;
-        s.s_positionActiveLoanIds[_request.positionId].push(_loanId);
+        s.s_loanSpokeChainId[_loanId] = _request.sourceChainId;
+        s.s_positionSpokeActiveLoanIds[_request.positionId][_request.sourceChainId].push(_loanId);
 
         s._updateVaultBorrows(_loan.token, _loan.principal);
 
@@ -215,8 +216,20 @@ library LibProtocol {
         // If fully repaid, update loan status and move to closed loans
         if (_loan.principal == 0) {
             _loan.status = LoanStatus.REPAID;
-            _removeLoanFromActive(s, _positionId, _loanId);
             s.s_positionClosedLoanIds[_positionId].push(_loanId);
+            if (s.s_loanSpokeChainId[_loanId] != 0) {
+                uint256 spokeChainId = s.s_loanSpokeChainId[_loanId];
+                uint256[] storage activeLoanIds = s.s_positionSpokeActiveLoanIds[_positionId][spokeChainId];
+                for (uint256 i = 0; i < activeLoanIds.length; i++) {
+                    if (activeLoanIds[i] == _loanId) {
+                        activeLoanIds[i] = activeLoanIds[activeLoanIds.length - 1];
+                        activeLoanIds.pop();
+                        break;
+                    }
+                }
+            } else {
+                _removeLoanFromActive(s, _positionId, _loanId);
+            }
         }
 
         s._updateVaultRepays(_loan.token, _amount);
@@ -224,7 +237,7 @@ library LibProtocol {
         bool _success = ERC20(_loan.token).transferFrom(msg.sender, address(s.i_tokenVault[_loan.token]), _amount);
         if (!_success) revert TRANSFER_FAILED();
 
-        emit LoanRepayment(_positionId, _loanId, _loan.token, _amount);
+        emit LoanRepaymentX(_positionId, _loanId, _loan.token, _amount, s.s_loanSpokeChainId[_loanId]);
         return _loan.principal;
     }
 
