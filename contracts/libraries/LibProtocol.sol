@@ -239,7 +239,7 @@ library LibProtocol {
         bool _success = ERC20(_loan.token).transferFrom(msg.sender, address(_vault), _amount);
         if (!_success) revert TRANSFER_FAILED();
 
-        emit LoanRepaymentX(_positionId, _loanId, _loan.token, _amount, s.s_loanSpokeChainId[_loanId]);
+        emit LoanRepaymentX(_positionId, _loanId, _loan.token, _amount, uint32(s.s_loanSpokeChainId[_loanId]));
         return _loan.principal;
     }
 
