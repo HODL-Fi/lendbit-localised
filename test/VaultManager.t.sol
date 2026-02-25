@@ -51,8 +51,10 @@ contract PositionManagerTest is Base {
         address _token = address(token1);
         uint256 _amount = 1000 ether;
 
-        token1.mint(user1, _amount);
-        vm.startPrank(user1);
+        address diamond = address(vaultManagerF);
+
+        token1.mint(diamond, _amount);
+        vm.startPrank(diamond);
         token1.approve(address(tokenVault1), _amount);
 
         tokenVault1.deposit(_amount, user1);

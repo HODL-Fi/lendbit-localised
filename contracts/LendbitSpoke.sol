@@ -120,10 +120,10 @@ contract LendbitSpoke is Ownable2Step {
         return LibLendbitSpoke._getHealthFactor(s, _positionId, _currentBorrowValue);
     }
 
-    function getBorrowDetails(uint256 _positionId, address _token) external view returns (uint256) {
-        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
-        return LibProtocol._calculateUserDebt(s, _positionId, _token, 0);
-    }
+    // function getBorrowDetails(uint256 _positionId, address _token) external view returns (uint256) {
+    //     LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+    //     return LibProtocol._calculateUserDebt(s, _positionId, _token, 0);
+    // }
 
     function getCollateralTokenLTV(address _token) external view returns (uint16) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();

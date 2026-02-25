@@ -107,6 +107,8 @@ library LibLendbitSpoke {
         uint256 _loanId = ++s.s_nextLoanId;
         s.s_loans[_loanId] = _loan;
         s.s_positionActiveLoanIds[_positionId].push(_loanId);
+        s.s_loanPrincipal[_loanId] = _principal;
+        s.s_loanStartTime[_loanId] = block.timestamp;
 
         emit LoanTaken(_positionId, _loanId, _loan.token, _loan.principal, _loan.tenureSeconds, _loan.annualRateBps);
         return _loanId;
@@ -165,16 +167,18 @@ library LibLendbitSpoke {
 
         // Update loan repaid amount
         _loan.repaid += _amount;
+        _loan.principal = _loanDebt - _amount;
+        _loan.startTimestamp = block.timestamp;
 
         // If fully repaid, update loan status and move to closed loans
-        if (_loanDebt - _amount == 0) {
+        if (_loan.principal == 0) {
             _loan.status = LoanStatus.REPAID;
             LibProtocol._removeLoanFromActive(s, _positionId, _loanId);
             s.s_positionClosedLoanIds[_positionId].push(_loanId);
         }
 
         emit LoanRepayment(_positionId, _loanId, _loan.token, _amount);
-        return _loanDebt - _amount;
+        return _loan.principal;
     }
 
     function _repayLoan(

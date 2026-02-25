@@ -91,9 +91,14 @@ library LibProtocol {
         uint256 _loanId = ++s.s_nextLoanId;
         s.s_loans[_loanId] = _loan;
         s.s_positionActiveLoanIds[_positionId].push(_loanId);
+        s.s_loanPrincipal[_loanId] = _principal;
+        s.s_loanStartTime[_loanId] = block.timestamp;
 
         s._updateVaultBorrows(_loan.token, _loan.principal);
-       
+
+        TokenVault _vault = s.i_tokenVault[_loan.token];
+        _vault.borrow(msg.sender, _loan.principal);
+
         emit LoanTaken(_positionId, _loanId, _loan.token, _loan.principal, _loan.tenureSeconds, _loan.annualRateBps);
         return _loanId;
     }
@@ -115,9 +120,11 @@ library LibProtocol {
 
         // Update loan repaid amount
         _loan.repaid += _amount;
+        _loan.principal = _loanDebt - _amount;
+        _loan.startTimestamp = block.timestamp;
 
         // If fully repaid, update loan status and move to closed loans
-        if (_loanDebt - _amount == 0) {
+        if (_loan.principal == 0) {
             _loan.status = LoanStatus.REPAID;
             _removeLoanFromActive(s, _positionId, _loanId);
             s.s_positionClosedLoanIds[_positionId].push(_loanId);
@@ -126,13 +133,14 @@ library LibProtocol {
         s._updateVaultRepays(_loan.token, _amount);
 
         emit LoanRepayment(_positionId, _loanId, _loan.token, _amount);
-        return _loanDebt - _amount;
+        return _loan.principal;
     }
 
-    function _repayLoan(LibAppStorage.StorageLayout storage s, RepayRequest calldata _request, bytes calldata _signature)
-        internal
-        returns (uint256)
-    {
+    function _repayLoan(
+        LibAppStorage.StorageLayout storage s,
+        RepayRequest calldata _request,
+        bytes calldata _signature
+    ) internal returns (uint256) {
         _verifyRepayRequest(s, _request, _signature);
 
         uint256 _positionId = _positionIdCheck(s);
@@ -163,7 +171,8 @@ library LibProtocol {
             )
         );
 
-        address _recovered = ecrecover(_hash, uint8(_signature[64]), bytes32(_signature[0:32]), bytes32(_signature[32:64]));
+        address _recovered =
+            ecrecover(_hash, uint8(_signature[64]), bytes32(_signature[0:32]), bytes32(_signature[32:64]));
         if (_recovered != s.s_requestSigner) revert REQUEST_INVALID_SIGNATURE(_recovered);
 
         if (s.s_requestRepayNonceUsed[_recovered][_request.nonce]) {
@@ -413,21 +422,6 @@ library LibProtocol {
         return _totalValue;
     }
 
-    // function _getHealthFactor(LibAppStorage.StorageLayout storage s, uint256 _positionId, uint256 _currentBorrowValue)
-    //     internal
-    //     view
-    //     returns (uint256)
-    // {
-    //     uint256 _collateralValue = _getPositionUtilizableCollateralValue(s, _positionId);
-    //     uint256 _borrowedValue = _getPositionBorrowedValue(s, _positionId);
-
-    //     _borrowedValue += _currentBorrowValue;
-
-    //     if (_borrowedValue == 0) return (_collateralValue * Constants.PRECISION); // No debt means max health factor
-
-    //     return _collateralValue * Constants.PRECISION / _borrowedValue; // Health factor with 18 decimals
-    // }
-
     function _getHealthFactor(LibAppStorage.StorageLayout storage s, uint256 _positionId, uint256 _currentBorrowValue)
         internal
         view
@@ -506,11 +500,7 @@ library LibProtocol {
             _totalOwed += penalty;
         }
 
-        if (_totalOwed <= _loan.repaid) {
-            return 0;
-        }
-
-        return _totalOwed - _loan.repaid;
+        return _totalOwed;
     }
 
     function _outstandingBalance(LibAppStorage.StorageLayout storage s, uint256 _loanId, uint256 _timestamp)
@@ -594,10 +584,10 @@ library LibProtocol {
         return (
             loan.positionId,
             loan.token,
-            loan.principal,
+            s.s_loanPrincipal[_loanId],
             loan.repaid,
             loan.tenureSeconds,
-            loan.startTimestamp,
+            s.s_loanStartTime[_loanId],
             _outstandingBalance(loan, block.timestamp),
             loan.annualRateBps,
             loan.penaltyRateBps,

@@ -1243,8 +1243,8 @@ contract LendbitSpokeTest is Base {
         assertEq(principal, borrowAmount, "Principal amount should match");
         assertEq(
             debt,
-            (borrowAmount * 20 / 100) + (borrowAmount / 2),
-            "debt amount should have increased by 20% of principal"
+            (borrowAmount * 20 / 200) + (borrowAmount / 2),
+            "debt amount should have increased by 20% of outstanding principal after repay"
         );
         assertEq(repaid, borrowAmount / 2, "Repaid amount should match");
         assertEq(startTimestamp, (block.timestamp - 365 days), "Start time should match");
