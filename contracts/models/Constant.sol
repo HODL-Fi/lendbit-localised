@@ -3,7 +3,7 @@ pragma solidity ^0.8.30;
 
 /// @dev Holds all the constant for our protocol
 library Constants {
-    uint16 constant LIQUIDATION_THRESHOLD = 8000;
+    uint16 constant LIQUIDATION_THRESHOLD = 9000;
     uint16 constant COLLATERALIZATION_RATIO = 8000;
     uint16 constant MAX_UTILIZATION = 8000;
     uint256 constant PRECISION = 1e18;

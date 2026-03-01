@@ -15,7 +15,7 @@ import "../contracts/facets/PositionManagerFacet.sol";
 import "../contracts/facets/VaultManagerFacet.sol";
 import "../contracts/facets/YieldStrategyFacet.sol";
 import "../contracts/Diamond.sol";
-import {VaultConfiguration, RepayRequest} from "../contracts/models/Protocol.sol";
+import {VaultConfiguration, RepayRequest, LiquidationRequest} from "../contracts/models/Protocol.sol";
 
 import {Test} from "forge-std/Test.sol";
 
@@ -54,12 +54,13 @@ contract Base is Test, IDiamondCut {
     address internal requestSignerAddress = vm.addr(REQUEST_SIGNER_PRIVATE_KEY);
     uint256 internal repayRequestNonce;
     string internal constant REPAY_ACTION = "REPAY_LOAN";
+    string internal constant LIQUIDATE_ACTION = "LIQUIDATE_LOAN";
 
     VaultConfiguration defaultConfig = VaultConfiguration({
         totalDeposits: 0,
         totalBorrows: 0,
-        baseRate: 500,
-        slopeRate: 1500,
+        baseRate: 2000,
+        slopeRate: 2500,
         reserveFactor: 2000,
         optimalUtilization: 7500,
         liquidationBonus: 1000,
@@ -220,12 +221,26 @@ contract Base is Test, IDiamondCut {
         return protocolF.repayLoan(request, signature);
     }
 
+    // function executeLiquidateLoan(uint256 _loanId, uint256 _amount, address collateralToken) internal virtual {
+    //     (LiquidationRequest memory request, bytes memory signature) =
+    //         buildLiquidationRequest(_loanId, _amount, collateralToken);
+    //     return liquidationF.liquidateLoan(request, signature);
+    // }
+
     function buildRepayRequest(uint256 _loanId, uint256 _amount)
         internal
         returns (RepayRequest memory request, bytes memory signature)
     {
         request = createRepayRequest(_loanId, _amount);
         signature = _signRepayRequest(request);
+    }
+
+    function buildLiquidationRequest(uint256 _loanId, uint256 _amount, address collateralToken)
+        internal
+        returns (LiquidationRequest memory request, bytes memory signature)
+    {
+        request = createLiquidationRequest(_loanId, _amount, collateralToken);
+        signature = _signLiquidationRequest(request);
     }
 
     function createRepayRequest(uint256 _loanId, uint256 _amount)
@@ -244,8 +259,30 @@ contract Base is Test, IDiamondCut {
         });
     }
 
+    function createLiquidationRequest(uint256 _loanId, uint256 _amount, address collateralToken)
+        internal
+        virtual
+        returns (LiquidationRequest memory request)
+    {
+        request = LiquidationRequest({
+            action: LIQUIDATE_ACTION,
+            loanId: _loanId,
+            amount: _amount,
+            sourceChainId: block.chainid,
+            targetChainId: block.chainid,
+            nonce: ++repayRequestNonce,
+            contractAddress: address(protocolF),
+            collateralToken: collateralToken
+        });
+    }
+
     function _signRepayRequest(RepayRequest memory request) internal pure returns (bytes memory signature) {
         signature = signRepayRequestWithKey(request, REQUEST_SIGNER_PRIVATE_KEY);
+    }
+
+    function _signLiquidationRequest(LiquidationRequest memory request) internal pure returns (bytes memory signature) {
+        bytes32 digest = _liquidationRequestDigest(request);
+        signature = signDigestWithKey(digest, REQUEST_SIGNER_PRIVATE_KEY);
     }
 
     function signRepayRequestWithKey(RepayRequest memory request, uint256 privateKey)
@@ -254,6 +291,11 @@ contract Base is Test, IDiamondCut {
         returns (bytes memory signature)
     {
         bytes32 digest = _repayRequestDigest(request);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+        signature = abi.encodePacked(r, s, v);
+    }
+
+    function signDigestWithKey(bytes32 digest, uint256 privateKey) internal pure returns (bytes memory signature) {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
         signature = abi.encodePacked(r, s, v);
     }
@@ -271,6 +313,26 @@ contract Base is Test, IDiamondCut {
                         request.targetChainId,
                         request.nonce,
                         request.contractAddress
+                    )
+                )
+            )
+        );
+    }
+
+    function _liquidationRequestDigest(LiquidationRequest memory request) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encodePacked(
+                "\x19Ethereum Signed Message:\n32",
+                keccak256(
+                    abi.encode(
+                        request.action,
+                        request.loanId,
+                        request.amount,
+                        request.sourceChainId,
+                        request.targetChainId,
+                        request.nonce,
+                        request.contractAddress,
+                        request.collateralToken
                     )
                 )
             )

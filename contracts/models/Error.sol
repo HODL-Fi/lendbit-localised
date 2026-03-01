@@ -25,6 +25,7 @@ error AMOUNT_MISMATCH(uint256 given, uint256 expected);
 error TRANSFER_FAILED();
 error INSUFFICIENT_ALLOWANCE();
 error INSUFFICIENT_BALANCE();
+error INSUFFICIENT_COLLATERAL();
 error HEALTH_FACTOR_TOO_LOW(uint256 healthFactor);
 error NOT_LIQUIDATABLE();
 error NO_ACTIVE_BORROW_FOR_TOKEN(uint256 positionId, address token);
@@ -36,6 +37,7 @@ error LTV_BELOW_TEN_PERCENT();
 error TOKEN_OVERUTILIZATION();
 error NO_OUTSTANDING_DEBT(uint256 positionId, address token);
 error INACTIVE_LOAN();
+error UNKNOWN_ACTION(string action);
 
 error EMPTY_STRING();
 error CURRENCY_ALREADY_SUPPORTED(string currency);
@@ -43,6 +45,7 @@ error CURRENCY_NOT_SUPPORTED(string currency);
 
 error STALE_PRICE_FEED(address priceFeed);
 error INVALID_PRICE_FEED(address priceFeed);
+error ZERO_PRICE_DATA();
 
 error YIELD_ALLOCATION_TOO_HIGH(uint16 bps);
 error YIELD_NOT_ENABLED(address token);

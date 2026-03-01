@@ -8,12 +8,15 @@ import {LibLendbitSpoke} from "./libraries/LibLendbitSpoke.sol";
 import {LibPositionManager} from "./libraries/LibPositionManager.sol";
 import {LibProtocol} from "./libraries/LibProtocol.sol";
 import {LibPriceOracle} from "./libraries/LibPriceOracle.sol";
+import {LibLiquidation} from "./libraries/LibLiquidation.sol";
 
-import {Loan, RepayRequest} from "./models/Protocol.sol";
-import {ONLY_SECURITY_COUNCIL} from "./models/Error.sol";
+import {ReceiverTemplate} from "./interfaces/ReceiverTemplate.sol";
 
-contract LendbitSpoke is Ownable2Step {
-    constructor() Ownable(msg.sender) {}
+import {Loan, RepayRequest, LiquidationRequest} from "./models/Protocol.sol";
+import {ONLY_SECURITY_COUNCIL, UNKNOWN_ACTION} from "./models/Error.sol";
+
+contract LendbitSpoke is ReceiverTemplate {
+    constructor(address forwarderAddress) ReceiverTemplate(forwarderAddress) {}
 
     function createPositionFor(address _user) external returns (uint256) {
         return LibPositionManager._createPositionFor(LibAppStorage.appStorage(), _user);
@@ -45,9 +48,9 @@ contract LendbitSpoke is Ownable2Step {
         return LibLendbitSpoke._repayLoan(s, _request, _signature);
     }
 
-    function liquidateLoan(uint256 _loanId, uint256 _amount, address _collateralToken) external {
+    function liquidateLoan(LiquidationRequest calldata _request, bytes calldata _signature) external {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
-        LibLendbitSpoke._liquidateLoan(s, _loanId, _amount, _collateralToken);
+        LibLendbitSpoke._liquidateLoan(s, _request, _signature);
     }
 
     function addCollateralToken(address _token, address _pricefeed, uint16 _tokenLTV) external onlySecurityCouncil {
@@ -197,6 +200,22 @@ contract LendbitSpoke is Ownable2Step {
     {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return LibPriceOracle._getTokenValueInUSD(s, _token, _amount);
+    }
+
+    function isLiquidatable(uint256 _positionId) external view returns (bool) {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        return LibLiquidation._isLiquidatable(s, _positionId);
+    }
+
+    function _processReport(bytes calldata report) internal override {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        (string memory _action, uint256 _loanId, uint256 _amount, address _collateralToken) =
+            abi.decode(report, (string, uint256, uint256, address));
+        if (keccak256(bytes(_action)) == keccak256("LIQUIDATE_LOAN")) {
+            LibLendbitSpoke._liquidateLoanFor(s, _loanId, _amount, _collateralToken);
+        } else {
+            revert UNKNOWN_ACTION(_action);
+        }
     }
 
     modifier onlySecurityCouncil() {

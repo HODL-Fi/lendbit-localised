@@ -8,7 +8,7 @@ import {LibPositionManager} from "./LibPositionManager.sol";
 import {LibPriceOracle} from "./LibPriceOracle.sol";
 import {Constants} from "../models/Constant.sol";
 
-import {Loan, LoanStatus, RepayRequest} from "../models/Protocol.sol";
+import {Loan, LoanStatus, LiquidationRequest, RepayRequest} from "../models/Protocol.sol";
 import {
     TokenSupportChanged,
     CollateralDeposited,
@@ -23,6 +23,7 @@ import {
     ADDRESS_ZERO,
     INACTIVE_LOAN,
     INSUFFICIENT_BALANCE,
+    INSUFFICIENT_COLLATERAL,
     HEALTH_FACTOR_TOO_LOW,
     LTV_BELOW_TEN_PERCENT,
     NOT_LOAN_OWNER,
@@ -116,6 +117,16 @@ library LibLendbitSpoke {
 
     function _liquidateLoan(
         LibAppStorage.StorageLayout storage s,
+        LiquidationRequest calldata _request,
+        bytes calldata _signature
+    ) internal {
+        _verifyLiquidationRequest(s, _request, _signature);
+
+        _liquidateLoanFor(s, _request.loanId, _request.amount, _request.collateralToken);
+    }
+
+    function _liquidateLoanFor(
+        LibAppStorage.StorageLayout storage s,
         uint256 _loanId,
         uint256 _amount,
         address _collateralToken
@@ -124,25 +135,30 @@ library LibLendbitSpoke {
         if (_loan.status != LoanStatus.FULFILLED) revert INACTIVE_LOAN();
         s._liquidationCheck(_loan.positionId, _loan.token, _collateralToken, _amount);
 
-        uint256 _amountToLiquidate = s._getAmountToLiquidate(_loan.positionId, _collateralToken, _loan.token, _amount);
-
+        uint256 _amountToLiquidate = LibLiquidation._getAmountToLiquidate(s, _collateralToken, _loan.token, _amount);
+        if (_amountToLiquidate > s.s_positionCollateral[_loan.positionId][_collateralToken]) {
+            revert INSUFFICIENT_COLLATERAL();
+        }
         s.s_positionCollateral[_loan.positionId][_collateralToken] -= _amountToLiquidate;
-        // Update loan repaid amount
-        _loan.repaid += _amount;
 
+        // Update loan repaid amount
         uint256 _loanDebt = LibProtocol._outstandingBalance(s, _loanId, block.timestamp);
 
+        if (_amount > _loanDebt) {
+            _amount = _loanDebt;
+        }
+
+        // update outstanding loan here
+        _loan.repaid += _amount;
+        _loan.principal = _loanDebt - _amount;
+        _loan.startTimestamp = block.timestamp;
+
         // If fully repaid, update loan status and move to closed loans
-        if (_loanDebt == 0) {
+        if (_loan.principal == 0) {
             _loan.status = LoanStatus.LIQUIDATED;
             LibProtocol._removeLoanFromActive(s, _loan.positionId, _loanId);
             s.s_positionClosedLoanIds[_loan.positionId].push(_loanId);
         }
-
-        // TODO: Token transfer to be discussed
-        // ERC20 _tokenI = ERC20(_loan.token);
-        // bool _success = _tokenI.transferFrom(msg.sender, address(s.i_tokenVault[_loan.token]), _amount);
-        // if (!_success) revert TRANSFER_FAILED();
 
         LibProtocol._transferToken(_collateralToken, msg.sender, _amountToLiquidate);
 
@@ -211,6 +227,49 @@ library LibLendbitSpoke {
                         _request.targetChainId,
                         _request.nonce,
                         _request.contractAddress
+                    )
+                )
+            )
+        );
+
+        address _recovered =
+            ecrecover(_hash, uint8(_signature[64]), bytes32(_signature[0:32]), bytes32(_signature[32:64]));
+        if (_recovered != s.s_requestSigner) revert REQUEST_INVALID_SIGNATURE(_recovered);
+
+        if (s.s_requestRepayNonceUsed[_recovered][_request.nonce]) {
+            revert REQUEST_REPAY_NONCE_USED(_recovered, _request.nonce);
+        }
+        s.s_requestRepayNonceUsed[_recovered][_request.nonce] = true;
+
+        if (_request.targetChainId != block.chainid) {
+            revert REQUEST_REPAY_TARGET_CHAIN_MISMATCH(block.chainid, _request.targetChainId);
+        }
+
+        if (_request.contractAddress != address(this)) {
+            revert REQUEST_REPAY_CONTRACT_MISMATCH(address(this), _request.contractAddress);
+        }
+    }
+
+    function _verifyLiquidationRequest(
+        LibAppStorage.StorageLayout storage s,
+        LiquidationRequest calldata _request,
+        bytes calldata _signature
+    ) internal {
+        if (s.s_requestSigner == address(0)) revert REQUEST_SIGNER_NOT_SET();
+
+        bytes32 _hash = keccak256(
+            abi.encodePacked(
+                "\x19Ethereum Signed Message:\n32",
+                keccak256(
+                    abi.encode(
+                        _request.action,
+                        _request.loanId,
+                        _request.amount,
+                        _request.sourceChainId,
+                        _request.targetChainId,
+                        _request.nonce,
+                        _request.contractAddress,
+                        _request.collateralToken
                     )
                 )
             )

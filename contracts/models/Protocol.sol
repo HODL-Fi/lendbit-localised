@@ -34,6 +34,16 @@ struct RepayRequest {
     address contractAddress;
 }
 
+struct LiquidationRequest {
+    string action;
+    uint256 loanId;
+    uint256 amount;
+    uint256 sourceChainId;
+    uint256 targetChainId;
+    uint256 nonce;
+    address contractAddress;
+    address collateralToken;
+}
 
 enum LoanStatus {
     REJECTED,

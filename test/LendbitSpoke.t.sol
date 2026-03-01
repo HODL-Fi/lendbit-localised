@@ -13,7 +13,7 @@ contract LendbitSpokeTest is Base {
     LendbitSpoke internal lendbitSpoke;
 
     function setUp() public override {
-        lendbitSpoke = new LendbitSpoke();
+        lendbitSpoke = new LendbitSpoke(0x15fC6ae953E024d975e77382eEeC56A9101f9F88);
 
         (address _token1, address _pricefeed1) = deployERC20ContractAndAddPriceFeed("token1", 18, 1500);
         (address _token2, address _pricefeed2) = deployERC20ContractAndAddPriceFeed("token2", 18, 300);
@@ -1309,6 +1309,23 @@ contract LendbitSpokeTest is Base {
             targetChainId: block.chainid,
             nonce: ++repayRequestNonce,
             contractAddress: address(lendbitSpoke)
+        });
+    }
+
+    function createLiquidationRequest(uint256 _loanId, uint256 _amount, address collateralToken)
+        internal
+        override
+        returns (LiquidationRequest memory request)
+    {
+        request = LiquidationRequest({
+            action: LIQUIDATE_ACTION,
+            loanId: _loanId,
+            amount: _amount,
+            sourceChainId: block.chainid,
+            targetChainId: block.chainid,
+            nonce: ++repayRequestNonce,
+            contractAddress: address(lendbitSpoke),
+            collateralToken: collateralToken
         });
     }
 

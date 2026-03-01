@@ -37,61 +37,81 @@ contract LiquidationTest is Base {
         createVaultAndFund(100e6);
         uint256 _positionId = depositCollateralFor(user1, address(token1), 4 ether);
 
-        uint256 _borrowAmount = 10e6;
+        uint256 _borrowAmount = 15e6;
         vm.startPrank(user1);
         protocolF.borrow(address(token4), _borrowAmount);
         vm.stopPrank();
+        vm.warp(block.timestamp + 365 days);
+
+        uint256 _debt = protocolF.getBorrowDetails(_positionId, address(token4));
 
         // Make position liquidatable
-        MockV3Aggregator(pricefeed4).updateAnswer(1000e8);
+        MockV3Aggregator(pricefeed1).updateAnswer(1110e8);
+
+        assertTrue(liquidationF.isLiquidatable(_positionId));
 
         uint256 _userCollateralBefore = protocolF.getPositionCollateral(_positionId, address(token1));
         uint256 _t1BalanceBefore = token1.balanceOf(liquidator);
+        uint256 _vaultAssetBefore = vaultManagerF.getVaultTotalAssets(address(token4));
 
         vm.startPrank(liquidator);
         // Give liquidator enough allowance and balance
-        token4.mint(liquidator, _borrowAmount);
-        token4.approve(address(liquidationF), _borrowAmount);
+        token4.mint(liquidator, _debt);
+        token4.approve(address(liquidationF), _debt);
 
         vm.expectEmit(true, true, true, false);
         emit PositionLiquidated(_positionId, liquidator, address(token1), 0);
-        vm.expectEmit(true, true, false, false);
+        vm.expectEmit(true, true, true, false);
         emit Repay(_positionId, address(token4), 0);
-        liquidationF.liquidatePosition(_positionId, _borrowAmount, address(token4), address(token1));
+        liquidationF.liquidatePosition(_positionId, _debt, address(token4), address(token1));
         vm.stopPrank();
 
-        vm.assertGt(_borrowAmount, token4.balanceOf(liquidator));
-        vm.assertLt(_t1BalanceBefore, token1.balanceOf(liquidator));
-        vm.assertGt(_userCollateralBefore, protocolF.getPositionCollateral(_positionId, address(token1)));
+        uint256 _userCollateralNow = protocolF.getPositionCollateral(_positionId, address(token1));
+        uint256 _liquidatorBalance = token1.balanceOf(liquidator);
+
+        assertEq(protocolF.getBorrowDetails(_positionId, address(token4)), 0); // new outstanding debt is zero
+        assertEq(_userCollateralBefore, _userCollateralNow + _liquidatorBalance);
+        assertEq(_vaultAssetBefore + _debt, vaultManagerF.getVaultTotalAssets(address(token4)));
+        assertGt(_borrowAmount, token4.balanceOf(liquidator));
+        assertLt(_t1BalanceBefore, token1.balanceOf(liquidator));
     }
 
     function testLiquidatePositionWithNativeTokenCollateral_Success() public {
         createVaultAndFund(100e6);
         uint256 _positionId = depositCollateralFor(user1, address(1), 4 ether);
 
-        uint256 _borrowAmount = 10e6;
+        uint256 _borrowAmount = 15e6;
         vm.startPrank(user1);
         protocolF.borrow(address(token4), _borrowAmount);
         vm.stopPrank();
+        vm.warp(block.timestamp + 365 days);
 
         // Make position liquidatable
-        MockV3Aggregator(pricefeed4).updateAnswer(1000e8);
+        MockV3Aggregator(pricefeed1).updateAnswer(1110e8);
 
+        assertTrue(liquidationF.isLiquidatable(_positionId));
+
+        uint256 _debt = protocolF.getBorrowDetails(_positionId, address(token4));
         uint256 _userCollateralBefore = protocolF.getPositionCollateral(_positionId, address(1));
+        uint256 _vaultAssetBefore = vaultManagerF.getVaultTotalAssets(address(token4));
         uint256 _t1BalanceBefore = liquidator.balance;
 
         vm.startPrank(liquidator);
         // Give liquidator enough allowance and balance
-        token4.mint(liquidator, _borrowAmount);
-        token4.approve(address(liquidationF), _borrowAmount);
+        token4.mint(liquidator, _debt);
+        token4.approve(address(liquidationF), _debt);
 
         vm.expectEmit(true, true, true, false);
-        emit PositionLiquidated(_positionId, liquidator, address(1), 0);
-        vm.expectEmit(true, true, false, false);
-        emit Repay(_positionId, address(token4), 0);
-        liquidationF.liquidatePosition(_positionId, _borrowAmount, address(token4), address(1));
+        emit PositionLiquidated(_positionId, liquidator, address(1), _debt);
+        vm.expectEmit(true, true, true, false);
+        emit Repay(_positionId, address(token4), _debt);
+        liquidationF.liquidatePosition(_positionId, _debt, address(token4), address(1));
         vm.stopPrank();
 
+        uint256 _userCollateralNow = protocolF.getPositionCollateral(_positionId, address(1));
+        assertEq(protocolF.getBorrowDetails(_positionId, address(token4)), 0); // new outstanding debt is zero
+        assertEq(_userCollateralBefore, _userCollateralNow + liquidator.balance);
+        assertEq(_vaultAssetBefore + _debt, vaultManagerF.getVaultTotalAssets(address(token4)));
         vm.assertGt(_borrowAmount, token4.balanceOf(liquidator));
         vm.assertLt(_t1BalanceBefore, liquidator.balance);
         vm.assertGt(_userCollateralBefore, protocolF.getPositionCollateral(_positionId, address(1)));
