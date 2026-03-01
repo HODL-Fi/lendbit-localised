@@ -16,6 +16,7 @@ import {Loan, RepayRequest, LiquidationRequest} from "./models/Protocol.sol";
 import {ONLY_SECURITY_COUNCIL, UNKNOWN_ACTION} from "./models/Error.sol";
 
 contract LendbitSpoke is ReceiverTemplate {
+    bytes32 constant LIQUIDATE_HASH = keccak256(bytes("LIQUIDATE_LOAN"));
     constructor(address forwarderAddress) ReceiverTemplate(forwarderAddress) {}
 
     function createPositionFor(address _user) external returns (uint256) {
@@ -211,7 +212,7 @@ contract LendbitSpoke is ReceiverTemplate {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         (string memory _action, uint256 _loanId, uint256 _amount, address _collateralToken) =
             abi.decode(report, (string, uint256, uint256, address));
-        if (keccak256(bytes(_action)) == keccak256("LIQUIDATE_LOAN")) {
+        if (keccak256(bytes(_action)) == LIQUIDATE_HASH) {
             LibLendbitSpoke._liquidateLoanFor(s, _loanId, _amount, _collateralToken);
         } else {
             revert UNKNOWN_ACTION(_action);
