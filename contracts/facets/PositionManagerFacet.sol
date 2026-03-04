@@ -6,6 +6,7 @@ import {LibDiamond} from "../libraries/LibDiamond.sol";
 import {LibPositionManager} from "../libraries/LibPositionManager.sol";
 
 import "../models/Error.sol";
+import "../models/Event.sol";
 
 contract PositionManagerFacet {
     using LibPositionManager for LibAppStorage.StorageLayout;
@@ -42,6 +43,24 @@ contract PositionManagerFacet {
         s.s_requestBorrowSigner = _signer;
     }
 
+    // CRE
+    /// @notice Updates the forwarder address that is allowed to call onReport
+    /// @param _forwarder The new forwarder address
+    /// @dev WARNING: Setting to address(0) disables forwarder validation.
+    ///      This makes your contract INSECURE - anyone can call onReport() with arbitrary data.
+    ///      Only use address(0) if you fully understand the security implications.
+    function setForwarderAddress(address _forwarder) external onlySecurityCouncil {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        address previousForwarder = s.s_forwarderAddress;
+
+        // Emit warning if disabling forwarder check
+        if (_forwarder == address(0)) {
+            emit SecurityWarning("Forwarder address set to zero - contract is now INSECURE");
+        }
+
+        s.s_forwarderAddress = _forwarder;
+        emit ForwarderAddressUpdated(previousForwarder, _forwarder);
+    }
     // Getter functions
 
     function getNextPositionId() external view returns (uint256) {

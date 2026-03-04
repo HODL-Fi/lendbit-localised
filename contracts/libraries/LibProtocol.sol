@@ -107,8 +107,8 @@ library LibProtocol {
 
     function _requestBorrow(
         LibAppStorage.StorageLayout storage s,
-        BorrowRequest calldata _request,
-        bytes calldata _signature
+        BorrowRequest memory _request,
+        bytes memory _signature
     ) internal returns (uint256) {
         if (bytes(_request.action).length == 0) revert EMPTY_STRING();
         if (_request.wallet == address(0) || _request.contractAddress == address(0)) revert ADDRESS_ZERO();
@@ -162,8 +162,8 @@ library LibProtocol {
 
     function _verifyBorrowSignature(
         LibAppStorage.StorageLayout storage s,
-        BorrowRequest calldata _request,
-        bytes calldata _signature
+        BorrowRequest memory _request,
+        bytes memory _signature
     ) internal view {
         if (s.s_requestBorrowSigner == address(0)) {
             revert REQUEST_BORROW_SIGNER_NOT_SET();

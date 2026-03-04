@@ -46,7 +46,7 @@ contract ProtocolFacet {
         return s._takeLoan(_token, _principal, _tenureSeconds);
     }
 
-    function requestBorrow(BorrowRequest calldata params, bytes calldata signature) external returns (uint256) {
+    function requestBorrow(BorrowRequest memory params, bytes memory signature) external returns (uint256) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return s._requestBorrow(params, signature);
     }

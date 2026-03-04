@@ -18,4 +18,7 @@ library Constants {
     uint256 constant BASIS_POINTS_SCALE_256 = 1e4; // 100% = 10000 basis points
     uint32 constant MAX_APR_BASIS_POINTS = 1e6; // Maximum 10000% APR
     uint256 constant ZERO = 0;
+
+    // Hex character lookup table for bytes-to-hex conversion
+    bytes private constant HEX_CHARS = "0123456789abcdef";
 }

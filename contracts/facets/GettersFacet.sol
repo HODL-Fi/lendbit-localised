@@ -145,4 +145,12 @@ contract GettersFacet {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return s._getTokenVault(_token);
     }
+
+    // CRE
+    /// @notice Returns the configured forwarder address
+    /// @return The forwarder address (address(0) if disabled)
+    function getForwarderAddress() external view returns (address) {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        return s.s_forwarderAddress;
+    }
 }

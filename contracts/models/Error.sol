@@ -56,3 +56,11 @@ error YIELD_LIQUIDITY_DEFICIT(address token, uint256 deficit);
 // chainlink functions error
 error OnlyRouterCanFulfill();
 error UnexpectedRequestID(bytes32 requestId);
+
+// CRE Custom errors
+error InvalidForwarderAddress();
+error InvalidSender(address sender, address expected);
+error InvalidAuthor(address received, address expected);
+error InvalidWorkflowName(bytes10 received, bytes10 expected);
+error InvalidWorkflowId(bytes32 received, bytes32 expected);
+error WorkflowNameRequiresAuthorValidation();

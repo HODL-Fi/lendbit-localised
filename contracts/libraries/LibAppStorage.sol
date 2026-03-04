@@ -68,6 +68,12 @@ library LibAppStorage {
         mapping(uint256 => uint256) s_loanStartTime;
         mapping(uint256 => uint256) s_loanSpokeChainId;
         mapping(uint256 => mapping(uint256 => uint256[])) s_positionSpokeActiveLoanIds; // positionId -> (spokeId -> list of active loanIds)
+        // Required permission field at deployment, configurable after
+        address s_forwarderAddress; // If set, only this address can call onReport
+        // Optional permission fields (all default to zero = disabled)
+        address s_expectedAuthor; // If set, only reports from this workflow owner are accepted
+        bytes10 s_expectedWorkflowName; // Only validated when s_expectedAuthor is also set
+        bytes32 s_expectedWorkflowId; // If set, only reports from this specific workflow ID are accepted
     }
 
     bytes32 internal constant STORAGE_SLOT = keccak256("contracts.storage.LibAppStorage");
