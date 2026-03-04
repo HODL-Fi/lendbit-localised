@@ -70,3 +70,10 @@ event Response(bytes32 indexed requestId, uint256 priceData, bytes response, byt
 event FunctionsRouterChanged(address indexed securityCouncil, bytes32 donId, address router);
 
 event FunctionsSourceChanged(address indexed securityCouncil, bytes source);
+
+// CRE EVENTS
+event ForwarderAddressUpdated(address indexed previousForwarder, address indexed newForwarder);
+event ExpectedAuthorUpdated(address indexed previousAuthor, address indexed newAuthor);
+event ExpectedWorkflowNameUpdated(bytes10 indexed previousName, bytes10 indexed newName);
+event ExpectedWorkflowIdUpdated(bytes32 indexed previousId, bytes32 indexed newId);
+event SecurityWarning(string message);
