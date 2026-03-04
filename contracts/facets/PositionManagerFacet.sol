@@ -48,7 +48,6 @@ contract PositionManagerFacet {
         return s.s_requestSigner;
     }
 
-
     //CRE
     /// @notice Updates the forwarder address that is allowed to call onReport
     /// @param _forwarder The new forwarder address

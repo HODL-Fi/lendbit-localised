@@ -7,6 +7,7 @@ import {LibProtocol} from "../libraries/LibProtocol.sol";
 import "../models/Error.sol";
 import "../models/Event.sol";
 
+import {RepayRequest} from "../models/Protocol.sol";
 
 contract ReceiverFacet {
     using LibProtocol for LibAppStorage.StorageLayout;
@@ -59,13 +60,38 @@ contract ReceiverFacet {
 
     /// @dev Routes to either lending debt creation based on prefix byte.
     function _processReport(bytes calldata report) internal {
-        if (report.length > 0 && report[0] == 0x01) {
-            _handleLendingDebtCreation(report[1:]);
+        if (report.length > 0 && report[0] == 0x02) {
+            _handleRepayCreation(report[1:]);
         }
     }
 
-    function _handleLendingDebtCreation(bytes calldata reportData) internal {
-       
+    function _handleRepayCreation(bytes calldata reportData) internal {
+        (
+            string action,
+            uint256 loanId,
+            uint256 amount,
+            uint256 sourceChainId,
+            uint256 targetChainId,
+            uint256 nonce,
+            address contractAddress,
+            bytes memory _signature
+        ) = abi.decode(reportData, (string, uint256, uint256, uint256, uint256, uint256, address, bytes));
+
+        RepayRequest memory _request = RepayRequest({
+            action: action,
+            loanId: loanId,
+            amount: amount,
+            sourceChainId: sourceChainId,
+            targetChainId: targetChainId,
+            nonce: nonce,
+            contractAddress: contractAddress
+        });
+        if (keccak256(bytes(action)) == keccak256(bytes("repay"))) {
+            LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+            s._repayLoan(_request, _signature);
+        } else {
+            revert InvalidAction(action);
+        }
     }
 
     //Helpers
