@@ -42,10 +42,10 @@ contract VaultManagerFacet {
     // }
 
     // ====== Security Council Vault Config Setters ======
-    // function setReserveFactor(address _token, uint16 _reserveFactor) external onlySecurityCouncil {
-    //     LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
-    //     LibVaultManager._setReserveFactor(s, _token, _reserveFactor);
-    // }
+    function setReserveFactor(address _token, uint16 _reserveFactor) external onlySecurityCouncil {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        LibVaultManager._setReserveFactor(s, _token, _reserveFactor);
+    }
 
     function setBaseRate(address _token, uint16 _baseRate) external onlySecurityCouncil {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
@@ -57,15 +57,15 @@ contract VaultManagerFacet {
         LibVaultManager._setSlopeRate(s, _token, _slopeRate);
     }
 
-    // function setOptimalUtilization(address _token, uint16 _optimalUtilization) external onlySecurityCouncil {
-    //     LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
-    //     LibVaultManager._setOptimalUtilization(s, _token, _optimalUtilization);
-    // }
+    function setOptimalUtilization(address _token, uint16 _optimalUtilization) external onlySecurityCouncil {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        LibVaultManager._setOptimalUtilization(s, _token, _optimalUtilization);
+    }
 
-    // function setLiquidationBonus(address _token, uint16 _liquidationBonus) external onlySecurityCouncil {
-    //     LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
-    //     LibVaultManager._setLiquidationBonus(s, _token, _liquidationBonus);
-    // }
+    function setLiquidationBonus(address _token, uint16 _liquidationBonus) external onlySecurityCouncil {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        LibVaultManager._setLiquidationBonus(s, _token, _liquidationBonus);
+    }
 
     function pauseTokenSupport(address _token) external onlySecurityCouncil {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
@@ -84,8 +84,7 @@ contract VaultManagerFacet {
 
     function getTokenVaultDetails(address _token) external view returns (uint256, uint256) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
-        VaultConfiguration memory _config = s.s_tokenVaultConfig[_token];
-        return (_config.totalDeposits, _config.totalBorrows);
+        return s._getTokenVaultDetails(_token);
     }
 
     modifier onlySecurityCouncil() {

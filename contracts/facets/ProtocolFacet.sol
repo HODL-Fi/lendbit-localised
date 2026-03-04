@@ -31,15 +31,15 @@ contract ProtocolFacet {
         s._withdrawCollateral(_token, _amount);
     }
 
-    // function borrow(address _token, uint256 _amount) external returns (uint256) {
-    //     LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
-    //     return s._borrow(_token, _amount);
-    // }
+    function borrow(address _token, uint256 _amount) external returns (uint256) {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        return s._borrow(_token, _amount);
+    }
 
-    // function repay(address _token, uint256 _amount) external returns (uint256) {
-    //     LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
-    //     return s._repay(_token, _amount);
-    // }
+    function repay(address _token, uint256 _amount) external returns (uint256) {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        return s._repay(_token, _amount);
+    }
 
     function takeLoan(address _token, uint256 _principal, uint256 _tenureSeconds) external returns (uint256) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();

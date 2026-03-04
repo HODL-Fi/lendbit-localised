@@ -68,32 +68,33 @@ library LibVaultManager {
         emit Withdrawal(_positionId, _token, _amount);
     }
 
-    function _upgradeVault(LibAppStorage.StorageLayout storage s, address _token, VaultConfiguration memory _config)
-        internal
-        returns (address)
-    {
-        TokenVault _oldVault = s.i_tokenVault[_token];
-        if (address(_oldVault) == address(0)) {
-            revert TOKEN_NOT_SUPPORTED(_token);
-        }
+    // function _upgradeVault(LibAppStorage.StorageLayout storage s, address _token, VaultConfiguration memory _config)
+    //     internal
+    //     returns (address)
+    // {
+    //     TokenVault _oldVault = s.i_tokenVault[_token];
+    //     if (address(_oldVault) == address(0)) {
+    //         revert TOKEN_NOT_SUPPORTED(_token);
+    //     }
 
-        TokenVault _tokenVault = new TokenVault(_token, _oldVault.name(), _oldVault.symbol(), address(this), _config.baseRate);
-        s.i_tokenVault[_token] = _tokenVault;
+    //     TokenVault _tokenVault =
+    //         new TokenVault(_token, _oldVault.name(), _oldVault.symbol(), address(this), _config.baseRate);
+    //     s.i_tokenVault[_token] = _tokenVault;
 
-        s.s_tokenVaultConfig[_token] = VaultConfiguration({
-            totalDeposits: 0,
-            totalBorrows: 0,
-            reserveFactor: _config.reserveFactor,
-            baseRate: _config.baseRate,
-            slopeRate: _config.slopeRate,
-            optimalUtilization: _config.optimalUtilization,
-            liquidationBonus: _config.liquidationBonus,
-            lastUpdated: block.timestamp
-        });
+    //     s.s_tokenVaultConfig[_token] = VaultConfiguration({
+    //         totalDeposits: 0,
+    //         totalBorrows: 0,
+    //         reserveFactor: _config.reserveFactor,
+    //         baseRate: _config.baseRate,
+    //         slopeRate: _config.slopeRate,
+    //         optimalUtilization: _config.optimalUtilization,
+    //         liquidationBonus: _config.liquidationBonus,
+    //         lastUpdated: block.timestamp
+    //     });
 
-        emit TokenAdded(_token, address(_tokenVault));
-        return address(_tokenVault);
-    }
+    //     emit TokenAdded(_token, address(_tokenVault));
+    //     return address(_tokenVault);
+    // }
 
     function _deployVault(
         LibAppStorage.StorageLayout storage s,
@@ -237,5 +238,14 @@ library LibVaultManager {
         TokenVault _tokenVault = s.i_tokenVault[asset];
         if (address(_tokenVault) == address(0)) revert TOKEN_NOT_SUPPORTED(asset);
         return _tokenVault.totalAssets();
+    }
+
+    function _getTokenVaultDetails(LibAppStorage.StorageLayout storage s, address _token)
+        internal
+        view
+        returns (uint256, uint256)
+    {
+        TokenVault vault = s.i_tokenVault[_token];
+        return (vault.totalDeposit(), vault.totalBorrow());
     }
 }
