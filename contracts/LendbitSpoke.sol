@@ -214,6 +214,8 @@ contract LendbitSpoke is ReceiverTemplate {
             abi.decode(report, (string, uint256, uint256, address));
         if (keccak256(bytes(_action)) == LIQUIDATE_HASH) {
             LibLendbitSpoke._liquidateLoanFor(s, _loanId, _amount, _collateralToken);
+        } else if (report.length > 0 && report[0] == 0x02) {
+            LibLendbitSpoke._handleRepayCreation(report[1:]);
         } else {
             revert UNKNOWN_ACTION(_action);
         }

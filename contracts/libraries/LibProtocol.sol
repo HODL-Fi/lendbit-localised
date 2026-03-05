@@ -138,8 +138,8 @@ library LibProtocol {
 
     function _repayLoan(
         LibAppStorage.StorageLayout storage s,
-        RepayRequest calldata _request,
-        bytes calldata _signature
+        RepayRequest memory _request,
+        bytes memory _signature
     ) internal returns (uint256) {
         _verifyRepayRequest(s, _request, _signature);
 
@@ -149,8 +149,8 @@ library LibProtocol {
 
     function _verifyRepayRequest(
         LibAppStorage.StorageLayout storage s,
-        RepayRequest calldata _request,
-        bytes calldata _signature
+        RepayRequest memory _request,
+        bytes memory _signature
     ) internal {
         if (s.s_requestSigner == address(0)) revert REQUEST_SIGNER_NOT_SET();
 
@@ -171,8 +171,15 @@ library LibProtocol {
             )
         );
 
-        address _recovered =
-            ecrecover(_hash, uint8(_signature[64]), bytes32(_signature[0:32]), bytes32(_signature[32:64]));
+        bytes32 r;
+        bytes32 _s;
+        uint8 v;
+        assembly {
+            r := mload(add(_signature, 32))
+            _s := mload(add(_signature, 64))
+            v := byte(0, mload(add(_signature, 96)))
+        }
+        address _recovered = ecrecover(_hash, v, r, _s);
         if (_recovered != s.s_requestSigner) revert REQUEST_INVALID_SIGNATURE(_recovered);
 
         if (s.s_requestRepayNonceUsed[_recovered][_request.nonce]) {

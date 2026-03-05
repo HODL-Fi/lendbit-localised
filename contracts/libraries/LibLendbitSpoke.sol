@@ -36,7 +36,8 @@ import {
     TOKEN_ALREADY_SUPPORTED_AS_COLLATERAL,
     TOKEN_NOT_SUPPORTED,
     TOKEN_NOT_SUPPORTED_AS_COLLATERAL,
-    TRANSFER_FAILED
+    TRANSFER_FAILED,
+    UNKNOWN_ACTION
 } from "../models/Error.sol";
 
 library LibLendbitSpoke {
@@ -326,5 +327,34 @@ library LibLendbitSpoke {
         uint256 _totalValue = LibProtocol._getPositionUtilizableCollateralValue(s, _positionId);
         uint256 remainingCollateral = _totalValue - LibProtocol._totalActiveDebt(s, _positionId);
         return remainingCollateral;
+    }
+
+    function _handleRepayCreation(bytes calldata reportData) internal {
+        (
+            string memory action,
+            uint256 loanId,
+            uint256 amount,
+            uint256 sourceChainId,
+            uint256 targetChainId,
+            uint256 nonce,
+            address contractAddress,
+            bytes memory _signature
+        ) = abi.decode(reportData, (string, uint256, uint256, uint256, uint256, uint256, address, bytes));
+
+        RepayRequest memory _request = RepayRequest({
+            action: action,
+            loanId: loanId,
+            amount: amount,
+            sourceChainId: sourceChainId,
+            targetChainId: targetChainId,
+            nonce: nonce,
+            contractAddress: contractAddress
+        });
+        if (keccak256(bytes(action)) == keccak256(bytes("repay"))) {
+            LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+            LibProtocol._repayLoan(s, _request, _signature);
+        } else {
+            revert UNKNOWN_ACTION(action);
+        }
     }
 }
