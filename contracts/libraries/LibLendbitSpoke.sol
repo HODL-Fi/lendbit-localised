@@ -210,11 +210,10 @@ library LibLendbitSpoke {
         return _loan.principal;
     }
 
-    function _repayLoan(
-        LibAppStorage.StorageLayout storage s,
-        RepayRequest calldata _request,
-        bytes calldata _signature
-    ) internal returns (uint256) {
+    function _repayLoan(LibAppStorage.StorageLayout storage s, RepayRequest memory _request, bytes memory _signature)
+        internal
+        returns (uint256)
+    {
         _verifyRepayRequest(s, _request, _signature);
 
         uint256 _positionId = _positionIdCheck(s, _request.walletAddress);
@@ -223,8 +222,8 @@ library LibLendbitSpoke {
 
     function _verifyRepayRequest(
         LibAppStorage.StorageLayout storage s,
-        RepayRequest calldata _request,
-        bytes calldata _signature
+        RepayRequest memory _request,
+        bytes memory _signature
     ) internal {
         if (s.s_requestSigner == address(0)) revert REQUEST_SIGNER_NOT_SET();
 
@@ -246,8 +245,15 @@ library LibLendbitSpoke {
             )
         );
 
-        address _recovered =
-            ecrecover(_hash, uint8(_signature[64]), bytes32(_signature[0:32]), bytes32(_signature[32:64]));
+        bytes32 r;
+        bytes32 _s;
+        uint8 v;
+        assembly {
+            r := mload(add(_signature, 32))
+            _s := mload(add(_signature, 64))
+            v := byte(0, mload(add(_signature, 96)))
+        }
+        address _recovered = ecrecover(_hash, v, r, _s);
         if (_recovered != s.s_requestSigner) revert REQUEST_INVALID_SIGNATURE(_recovered);
 
         if (s.s_requestRepayNonceUsed[_recovered][_request.nonce]) {
@@ -266,7 +272,7 @@ library LibLendbitSpoke {
 
     function _verifyLiquidationRequest(
         LibAppStorage.StorageLayout storage s,
-        LiquidationRequest calldata _request,
+        LiquidationRequest memory _request,
         bytes calldata _signature
     ) internal {
         if (s.s_requestSigner == address(0)) revert REQUEST_SIGNER_NOT_SET();
@@ -368,7 +374,7 @@ library LibLendbitSpoke {
         });
         if (keccak256(bytes(action)) == keccak256(bytes("repay"))) {
             LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
-            LibProtocol._repayLoan(s, _request, _signature);
+            _repayLoan(s, _request, _signature);
         } else {
             revert UNKNOWN_ACTION(action);
         }
