@@ -212,7 +212,6 @@ contract LendbitSpoke is ReceiverTemplate {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
 
         if (report.length > 0 && report[0] == 0x01) {
-
             (, uint256 _loanId, uint256 _amount, address _collateralToken) =
                 abi.decode(report[1:], (string, uint256, uint256, address));
 
