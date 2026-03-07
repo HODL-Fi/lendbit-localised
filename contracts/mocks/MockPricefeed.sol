@@ -96,9 +96,8 @@ contract Pricefeed is AggregatorV2V3Interface, ReceiverTemplate {
             uint256 nonce,
             uint256 sourceChainId,
             uint256 targetChainId,
-            address contractAddress,
-            bytes memory _signature
-        ) = abi.decode(report, (string, int256, uint256, uint256, uint256, address, bytes));
+            address contractAddress
+        ) = abi.decode(report, (string, int256, uint256, uint256, uint256, address));
         if (keccak256(bytes(action)) == keccak256(bytes("UPDATE_PRICEFEED"))) {
             UpdatePricefeedRequest memory _request = UpdatePricefeedRequest({
                 action: action,
@@ -108,42 +107,15 @@ contract Pricefeed is AggregatorV2V3Interface, ReceiverTemplate {
                 targetChainId: targetChainId,
                 contractAddress: contractAddress
             });
-            _verifyUpdatePricefeedRequest(_request, _signature);
+            _verifyUpdatePricefeedRequest(_request);
             _updateAnswer(_request.amount);
         } else {
             revert UNKNOWN_ACTION(action);
         }
     }
 
-    function _verifyUpdatePricefeedRequest(UpdatePricefeedRequest memory _request, bytes memory _signature) internal {
+    function _verifyUpdatePricefeedRequest(UpdatePricefeedRequest memory _request) internal view {
         if (requestSigner == address(0)) revert REQUEST_SIGNER_NOT_SET();
-
-        bytes32 _hash = keccak256(
-            abi.encodePacked(
-                "\x19Ethereum Signed Message:\n32",
-                keccak256(
-                    abi.encode(
-                        _request.action, _request.amount, _request.nonce, _request.sourceChainId, _request.targetChainId
-                    )
-                )
-            )
-        );
-
-        bytes32 r;
-        bytes32 _s;
-        uint8 v;
-        assembly {
-            r := mload(add(_signature, 32))
-            _s := mload(add(_signature, 64))
-            v := byte(0, mload(add(_signature, 96)))
-        }
-        address _recovered = ecrecover(_hash, v, r, _s);
-        if (_recovered != requestSigner) revert REQUEST_INVALID_SIGNATURE(_recovered);
-
-        if (requestRepayNonceUsed[_recovered][_request.nonce]) {
-            revert REQUEST_NONCE_USED(_recovered, _request.nonce);
-        }
-        requestRepayNonceUsed[_recovered][_request.nonce] = true;
 
         if (_request.targetChainId != block.chainid) {
             revert REQUEST_TARGET_CHAIN_MISMATCH(block.chainid, _request.targetChainId);
