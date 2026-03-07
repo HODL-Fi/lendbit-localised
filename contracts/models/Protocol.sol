@@ -32,6 +32,7 @@ struct RepayRequest {
     uint256 targetChainId;
     uint256 nonce;
     address contractAddress;
+    address walletAddress;
 }
 
 struct LiquidationRequest {
@@ -43,6 +44,7 @@ struct LiquidationRequest {
     uint256 nonce;
     address contractAddress;
     address collateralToken;
+    address walletAddress;
 }
 
 enum LoanStatus {

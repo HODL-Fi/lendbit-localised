@@ -64,3 +64,4 @@ error InvalidAuthor(address received, address expected);
 error InvalidWorkflowName(bytes10 received, bytes10 expected);
 error InvalidWorkflowId(bytes32 received, bytes32 expected);
 error WorkflowNameRequiresAuthorValidation();
+error InvalidAction(string action);

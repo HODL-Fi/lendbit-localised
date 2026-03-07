@@ -28,8 +28,8 @@ contract Deployment is Script {
     function run() external {
         vm.startBroadcast();
         address admin = 0xb159588fc04378B8334BA49593aAa3966663ACe1;
-        lendbitSpoke = LendbitSpoke(0x5C15e91b1fF894091bA4012070Ac0e7728314748);
-        // lendbitSpoke = new LendbitSpoke(0x76c9cf548b4179F8901cda1f8623568b58215E62);
+        // lendbitSpoke = LendbitSpoke(0x0D7F896905663879bD384A9D7617593e8095AF10);
+        lendbitSpoke = new LendbitSpoke(0x2E7371a5D032489E4F60216d8D898A4C10805963);
         // cngnPricefeed = new MockV3Aggregator(8, 70287);
         cngnPricefeed = MockV3Aggregator(0xFAcB3a0c911381693f07caa46B8ce383160288Ba);
         // cngnToken = new ERC20Mock(6);

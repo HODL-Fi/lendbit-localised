@@ -67,15 +67,16 @@ contract ReceiverFacet {
 
     function _handleRepayCreation(bytes calldata reportData) internal {
         (
-            string action,
+            string memory action,
             uint256 loanId,
             uint256 amount,
             uint256 sourceChainId,
             uint256 targetChainId,
             uint256 nonce,
             address contractAddress,
+            address walletAddress,
             bytes memory _signature
-        ) = abi.decode(reportData, (string, uint256, uint256, uint256, uint256, uint256, address, bytes));
+        ) = abi.decode(reportData, (string, uint256, uint256, uint256, uint256, uint256, address, address, bytes));
 
         RepayRequest memory _request = RepayRequest({
             action: action,
@@ -84,7 +85,8 @@ contract ReceiverFacet {
             sourceChainId: sourceChainId,
             targetChainId: targetChainId,
             nonce: nonce,
-            contractAddress: contractAddress
+            contractAddress: contractAddress,
+            walletAddress: walletAddress
         });
         if (keccak256(bytes(action)) == keccak256(bytes("repay"))) {
             LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();

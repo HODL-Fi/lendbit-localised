@@ -255,7 +255,8 @@ contract Base is Test, IDiamondCut {
             sourceChainId: block.chainid,
             targetChainId: block.chainid,
             nonce: ++repayRequestNonce,
-            contractAddress: address(protocolF)
+            contractAddress: address(protocolF),
+            walletAddress: msg.sender
         });
     }
 
@@ -272,7 +273,8 @@ contract Base is Test, IDiamondCut {
             targetChainId: block.chainid,
             nonce: ++repayRequestNonce,
             contractAddress: address(protocolF),
-            collateralToken: collateralToken
+            collateralToken: collateralToken,
+            walletAddress: msg.sender
         });
     }
 

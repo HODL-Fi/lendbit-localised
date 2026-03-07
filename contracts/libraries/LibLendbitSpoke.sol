@@ -27,6 +27,7 @@ import {
     HEALTH_FACTOR_TOO_LOW,
     LTV_BELOW_TEN_PERCENT,
     NOT_LOAN_OWNER,
+    NO_POSITION_ID,
     NO_OUTSTANDING_DEBT,
     REQUEST_SIGNER_NOT_SET,
     REQUEST_INVALID_SIGNATURE,
@@ -44,6 +45,17 @@ library LibLendbitSpoke {
     using LibLiquidation for LibAppStorage.StorageLayout;
     using LibPositionManager for LibAppStorage.StorageLayout;
     using LibPriceOracle for LibAppStorage.StorageLayout;
+
+    function _positionIdCheck(LibAppStorage.StorageLayout storage s, address _user) internal view returns (uint256) {
+        _callerWhitelisted(s, _user);
+        uint256 _positionId = s._getPositionIdForUser(_user);
+        if (_positionId == 0) revert NO_POSITION_ID(_user);
+        return _positionId;
+    }
+
+    function _callerWhitelisted(LibAppStorage.StorageLayout storage s, address _user) internal view {
+        if (!s.isWhitelisted[_user]) revert ADDRESS_NOT_WHITELISTED(msg.sender);
+    }
 
     function _depositCollateral(LibAppStorage.StorageLayout storage s, address _token, uint256 _amount) internal {
         LibProtocol._validateAmount(_token, _amount);
@@ -205,7 +217,7 @@ library LibLendbitSpoke {
     ) internal returns (uint256) {
         _verifyRepayRequest(s, _request, _signature);
 
-        uint256 _positionId = LibProtocol._positionIdCheck(s);
+        uint256 _positionId = _positionIdCheck(s, _request.walletAddress);
         return _repayLoanFor(s, _positionId, _request.loanId, _request.amount);
     }
 
@@ -227,7 +239,8 @@ library LibLendbitSpoke {
                         _request.sourceChainId,
                         _request.targetChainId,
                         _request.nonce,
-                        _request.contractAddress
+                        _request.contractAddress,
+                        _request.walletAddress
                     )
                 )
             )
@@ -270,7 +283,8 @@ library LibLendbitSpoke {
                         _request.targetChainId,
                         _request.nonce,
                         _request.contractAddress,
-                        _request.collateralToken
+                        _request.collateralToken,
+                        _request.walletAddress
                     )
                 )
             )
@@ -338,8 +352,9 @@ library LibLendbitSpoke {
             uint256 targetChainId,
             uint256 nonce,
             address contractAddress,
+            address walletAddress,
             bytes memory _signature
-        ) = abi.decode(reportData, (string, uint256, uint256, uint256, uint256, uint256, address, bytes));
+        ) = abi.decode(reportData, (string, uint256, uint256, uint256, uint256, uint256, address, address, bytes));
 
         RepayRequest memory _request = RepayRequest({
             action: action,
@@ -348,7 +363,8 @@ library LibLendbitSpoke {
             sourceChainId: sourceChainId,
             targetChainId: targetChainId,
             nonce: nonce,
-            contractAddress: contractAddress
+            contractAddress: contractAddress,
+            walletAddress: walletAddress
         });
         if (keccak256(bytes(action)) == keccak256(bytes("repay"))) {
             LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
