@@ -1,98 +1,125 @@
-[![Mentioned in Awesome Foundry](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/crisgarner/awesome-foundry)
-# LendBit: Localised Lending Diamonds
+# HODL: Multi-Chain Hub Protocol
 
-LendBit brings collateralised crypto lending to local markets. The protocol is built on the [EIP-2535 Diamond](https://eips.ethereum.org/EIPS/eip-2535) standard, supports multi-asset vaults, Chainlink-powered price feeds, tenured loans, local-currency abstractions, and now an Aave-integrated yield layer that keeps collateral productive.
+The HODL Hub is the decentralized settlement and liquidity engine of the HODL protocol. While frequently deployed on high-throughput networks like ETH, Base, BSC..., the Hub is designed to be chain-agnostic, allowing HODL to scale liquidity across multiple "Hub" environments simultaneously.
 
-This repository hosts the on-chain contracts, deployment scripts, and Foundry test suite.
+Built on the EIP-2535 Diamond Standard, the Hub provides a modular architecture for cross-chain collateral management, yield optimization, and fiat-abstraction lending.
 
-## Core Features
+## 🏗 Architecture: The HODL Diamond
 
-- **Diamond Architecture** – Modular facets (`Protocol`, `VaultManager`, `Liquidation`, `PriceOracle`, `PositionManager`, `YieldStrategy`, etc.) expose isolated functionality while sharing storage through `LibAppStorage`.
-- **Collateral & Vaults** – Security council can list collateral tokens, configure LTVs, and deploy ERC4626-style vaults that track deposits/borrows plus reserve factors.
-- **Tenured Loans** – Borrowers lock principal for a specified tenure, accrue interest + penalties, and can repay early or be liquidated when health factors fall below thresholds.
-- **Local Currency Support** – Map currencies such as NGN, KES, UGX to stable on-chain representations and price feeds to unlock regional borrowing experiences.
-- **Chainlink Functions** – Integrations for price discovery and off-chain computation relayed through router + DON configuration held in storage.
-- **Yield Strategy Facet** – A configurable slice of collateral is deployed into an Aave-compatible pool to earn interest, automatically splitting yield between the borrower and the protocol treasury. See `docs/yield-strategy.md` for the full design.
+The Hub utilizes a Diamond proxy pattern to manage complex logic across multiple facets while maintaining a unified state via LibAppStorage.
 
-## Repository Layout (abridged)
+```mermaid
+graph TD
+    Proxy[Diamond Proxy] --> ReceiverFacet[Receiver Facet]
+    Proxy --> ProtocolFacet[Protocol Facet]
+    Proxy --> VaultFacet[Vault Manager Facet]
+    Proxy --> RepayFacet[Repayment Facet]
+    Proxy --> YieldFacet[Aave Yield Strategy]
+    
+    subgraph "Trust Layer"
+        CRE{{Chainlink CRE}}
+    end
+
+    CRE -- "onReport()" --> ReceiverFacet
+    
+    subgraph "Shared Storage"
+        LibStorage[(LibAppStorage)]
+    end
+    
+    ReceiverFacet -.-> LibStorage
+    ProtocolFacet -.-> LibStorage
 
 ```
-contracts/
-	Diamond.sol                # Diamond proxy entry point
-	TokenVault.sol             # ERC4626-style vault for lender liquidity
-	facets/                    # Individual facet contracts
-	libraries/                 # Lib* files with core protocol logic
-	models/                    # Shared structs, errors, constants
-	mocks/                     # Test doubles (e.g., MockAavePool)
-scripts/
-	Deploy.s.sol               # Foundry deployment script
-	deploy.js                  # Hardhat deployment script
-test/
-	*.t.sol                    # Foundry test suites (Protocol, VaultManager, YieldStrategy...)
-docs/
-	yield-strategy.md          # Detailed description of the Aave integration
-```
 
-## Prerequisites
+## Core Facets
 
-- Node.js >= 18 (used for selector generation via `scripts/genSelectors.js`)
-- Yarn or npm
-- [Foundry](https://book.getfoundry.sh/) toolchain (`forge`, `cast`, `anvil`)
-- (Optional) Hardhat for JS deployments
+- `ReceiverFacet` **(The Gateway)**: The entry point for all cross-chain instructions. It contains the onReport function which processes verified data from the Spokes.
 
-## Installation
+- `PositionManagerFacet`: Global configuration, fee structures, and the CRE Access Control list.
 
-```bash
-git clone https://github.com/LendBit-p2p/lendbit-localised.git
+- `VaultManagerFacet`: Manages ERC4626-style vaults and tracks global LTV (Loan-to-Value) ratios for supported collateral.
+
+- `ProtocolFacet`: Processes stablecoin settlements and emits the LoanRepaymentX events required for collateral release.
+
+- `YieldStrategyFacet`: Automatically routes collateral into Aave-style pools to offset borrower interest through productive yield.
+
+## 🔒 Security: The ReceiverFacet & CRE
+
+The `ReceiverFacet` implements a strict security model to ensure the integrity of the cross-chain lending loop:
+
+`onReport(bytes calldata report)`
+
+This is the most sensitive function in the protocol.
+
+1. Access Control: It is protected by an modifier. Only the authorized Chainlink Runtime Environment address can successfully call this function.
+
+2. Execution: Upon receiving a report, the facet decodes the instructions and interacts with the `PositionManager` to authorize the issuance of stable assets.
+
+3. Integrity: Because the CRE is a trust-minimized environment, the Hub can safely assume the data in the report has been validated against Spoke-side events.
+
+## 🚀 Key Features
+
+- **Multi-Hub Deployment**: Can be deployed on Base, Arbitrum, or any EVM-compatible chain to serve as a regional or global liquidity source.
+
+- **CRE-Driven Automation**: No manual bridging. The CRE triggers the Hub logic automatically based on Spoke-side activity.
+
+- **Productive Collateral**: Integrated Aave yield layer ensures that locked assets are not sitting idle.
+
+- **Diamond Modularity**: New facets (like advanced liquidation logic or new yield strategies) can be added without migrating liquidity.
+
+## 💻 Installation & Setup
+
+### Prerequisites
+
+- Foundry toolchain (forge, cast, anvil)
+
+- Node.js >= 18 (for selector generation)
+
+### Install
+
+```sh
+git clone https://github.com/HODL-Fi/lendbit-localised.git
 cd lendbit-localised
-# install JS deps for selector scripts
-npm install --legacy-peer-deps
-# pull Foundry dependencies
+
+# Install Foundry dependencies
 forge install
+# Install JS dependencies for scripts
+npm install
 ```
 
-## Useful Commands
+## 🧪 Testing & Deployment
 
-### Compile
+### Local Simulation
 
-```bash
-forge build
-# or
-npx hardhat compile
+The suite includes specialized tests for the ReceiverFacet to ensure the onlyCRE restriction and report decoding logic are robust.
+
+```sh
+# Run entire suite
+forge test
+
+# Test CRE report processing
+forge test --match-test testOnReport
 ```
 
-### Test
+### Deployment (Foundry Script)
 
-```bash
-forge test                      # run entire suite (140+ tests)
-forge test --match-path test/YieldStrategy.t.sol
+The deployment script initializes the Diamond and sets the initial CRE authorized address in storage.
+
+```sh
+forge script scripts/Deploy.s.sol --rpc-url <YOUR_RPC_URL> --broadcast
 ```
 
-### Lint & Format
+## 📈 Yield Strategy (Aave Integration)
 
-```bash
-forge fmt
-npx solhint "contracts/**/*.sol"
-```
+The protocol routes a configurable percentage of collateral into Aave to generate yield.
 
-### Deploy (examples)
+- **Borrower Benefit**: Yield earned is used to offset the accrued interest on the fiat loan.
 
-```bash
-# Hardhat (network config in hardhat.config.js)
-npx hardhat run scripts/deploy.js --network <network>
+- **Protocol Benefit**: A small "Reserve Factor" is taken from the yield to fund the HODL treasury.
 
-# Foundry script
-defaultAnvilRpc=http://localhost:8545
-forge script scripts/Deploy.s.sol \
-	--fork-url $defaultAnvilRpc \
-	--broadcast
-```
+- **Safety**: Withdrawal and liquidation logic automatically unwinds these positions before releasing collateral.
 
-## Yield Strategy Overview
-
-The `YieldStrategyFacet` routes a configurable portion of each position’s collateral into an Aave-style pool:
-
-- Configure via `configureYieldToken(token, pool, aToken, allocationBps, protocolShareBps)`.
-- Deposits automatically allocate, withdrawals/liquidations automatically unwind.
-- Borrowers claim rewards with `claimYield`, protocol treasury harvests via `harvestProtocolYield`.
-- Documentation lives in `docs/yield-strategy.md`; tests in `test/YieldStrategy.t.sol`.
+## Other Links
+- **[Hodl CRE WOrkflow](https://github.com/HODL-Fi/hodl-workflow)**
+- **[Spoke Smart Contract](https://github.com/HODL-Fi/lendbit-localised/blob/lendbit-spoke/contracts/LendbitSpoke.sol)**
+- **[Try Out Hodl @ avax.joinhodl.com](https://avax.joinhodl.com)**
