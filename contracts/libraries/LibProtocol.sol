@@ -83,6 +83,7 @@ library LibProtocol {
             token: _token,
             principal: _principal,
             repaid: 0,
+            outstanding: _principal,
             tenureSeconds: _tenureSeconds,
             startTimestamp: block.timestamp,
             annualRateBps: s.s_interestRate,
@@ -556,12 +557,12 @@ library LibProtocol {
         }
 
         uint256 _interest =
-            (_loan.principal * _loan.annualRateBps * _timeElapsed) / (Constants.BASIS_POINTS_SCALE_256 * 365 days);
-        uint256 _totalOwed = _loan.principal + _interest;
+            (_loan.outstanding * _loan.annualRateBps * _timeElapsed) / (Constants.BASIS_POINTS_SCALE_256 * 365 days);
+        uint256 _totalOwed = _loan.outstanding + _interest;
 
         if (_timestamp > (_loan.startTimestamp + _loan.tenureSeconds)) {
             uint256 penaltyTime = _timestamp - (_loan.startTimestamp + _loan.tenureSeconds);
-            uint256 penalty = (_loan.principal * (_loan.annualRateBps + _loan.penaltyRateBps) * penaltyTime)
+            uint256 penalty = (_loan.outstanding * (_loan.annualRateBps + _loan.penaltyRateBps) * penaltyTime)
                 / (Constants.BASIS_POINTS_SCALE_256 * 365 days);
             _totalOwed += penalty;
         }

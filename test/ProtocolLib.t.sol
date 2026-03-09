@@ -33,6 +33,7 @@ contract ProtocolLibTest is Base {
             token: address(0),
             principal: principal - repaid,
             repaid: repaid,
+            outstanding: principal - repaid,
             startTimestamp: block.timestamp,
             tenureSeconds: 365 days,
             annualRateBps: 2000, // 20%
@@ -55,6 +56,7 @@ contract ProtocolLibTest is Base {
             token: address(0),
             principal: principal,
             repaid: repaid,
+            outstanding: principal,
             startTimestamp: block.timestamp,
             tenureSeconds: 365 days,
             annualRateBps: 2000, // 20%

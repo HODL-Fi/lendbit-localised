@@ -43,6 +43,7 @@ library LibPriceOracle {
             AggregatorV3Interface(_pricefeed).latestRoundData();
 
         bool _isStale = (_roundId != _answeredInRound);
+        // forge-lint: disable-next-line(unsafe-typecast)
         return (_isStale, uint256(_answer));
     }
 
