@@ -226,10 +226,12 @@ contract Base is Test, IDiamondCut {
         // address _vault =
         vault = vaultManagerF.deployVault(address(token4), pricefeed4, "xSToken", "xSTK", defaultConfig);
 
-        token4.mint(address(this), _amount);
-        token4.approve(address(vaultManagerF), _amount);
+        if (_amount != 0) {
+            token4.mint(address(this), _amount);
+            token4.approve(address(vaultManagerF), _amount);
 
-        vaultManagerF.deposit(_token4, _amount);
+            vaultManagerF.deposit(_token4, _amount);
+        }
     }
 
     function whitelistUserAddresses() internal {

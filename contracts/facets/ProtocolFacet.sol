@@ -6,6 +6,7 @@ import {LibDiamond} from "../libraries/LibDiamond.sol";
 import {LibProtocol} from "../libraries/LibProtocol.sol";
 
 import "../models/Error.sol";
+import {BorrowRequest} from "../models/Protocol.sol";
 
 contract ProtocolFacet {
     using LibProtocol for LibAppStorage.StorageLayout;
@@ -43,6 +44,11 @@ contract ProtocolFacet {
     function takeLoan(address _token, uint256 _principal, uint256 _tenureSeconds) external returns (uint256) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return s._takeLoan(_token, _principal, _tenureSeconds);
+    }
+
+    function requestBorrow(BorrowRequest memory params, bytes memory signature) external returns (uint256) {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        return s._requestBorrow(params, signature);
     }
 
     function repayLoanFor(uint256 positionId, uint256 loanId, uint256 _amount) external returns (uint256) {

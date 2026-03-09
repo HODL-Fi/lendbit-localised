@@ -51,6 +51,9 @@ library LibAppStorage {
 
         mapping(address => bool) isWhitelisted; // address -> whitelist status
 
+        address s_requestBorrowSigner;
+        mapping(address => mapping(uint256 => bool)) s_requestBorrowNonceUsed;
+
         // Chainlink functions variables
         uint32 s_gasLimit;
         uint64 s_subscriptionId;
@@ -61,6 +64,16 @@ library LibAppStorage {
         string s_source;
         address s_router;
         mapping(bytes32 _requestId => FunctionResponse) s_functionResponse;
+        mapping(uint256 => uint256) s_loanPrincipal;
+        mapping(uint256 => uint256) s_loanStartTime;
+        mapping(uint256 => uint256) s_loanSpokeChainId;
+        mapping(uint256 => mapping(uint256 => uint256[])) s_positionSpokeActiveLoanIds; // positionId -> (spokeId -> list of active loanIds)
+        // Required permission field at deployment, configurable after
+        address s_forwarderAddress; // If set, only this address can call onReport
+        // Optional permission fields (all default to zero = disabled)
+        address s_expectedAuthor; // If set, only reports from this workflow owner are accepted
+        bytes10 s_expectedWorkflowName; // Only validated when s_expectedAuthor is also set
+        bytes32 s_expectedWorkflowId; // If set, only reports from this specific workflow ID are accepted
     }
 
     bytes32 internal constant STORAGE_SLOT = keccak256("contracts.storage.LibAppStorage");

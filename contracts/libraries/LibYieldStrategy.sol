@@ -25,7 +25,9 @@ library LibYieldStrategy {
         uint16 _allocationBps,
         uint16 _protocolShareBps
     ) internal {
-        if (_token == address(0) || _pool == address(0) || _aToken == address(0)) revert ADDRESS_ZERO();
+        if (_token == address(0) || _pool == address(0) || _aToken == address(0)) {
+            revert ADDRESS_ZERO();
+        }
         if (_token == Constants.NATIVE_TOKEN) revert TOKEN_NOT_SUPPORTED(_token);
         if (_allocationBps > Constants.BASIS_POINTS_SCALE) revert YIELD_ALLOCATION_TOO_HIGH(_allocationBps);
         if (_protocolShareBps > Constants.BASIS_POINTS_SCALE) revert YIELD_ALLOCATION_TOO_HIGH(_protocolShareBps);
@@ -146,9 +148,7 @@ library LibYieldStrategy {
             return s.s_positionYield[_positionId][_token].userAccrued;
         }
 
-        uint256 _currentBalance = _config.aToken == address(0)
-            ? 0
-            : IERC20(_config.aToken).balanceOf(address(this));
+        uint256 _currentBalance = _config.aToken == address(0) ? 0 : IERC20(_config.aToken).balanceOf(address(this));
         uint256 _accrued = 0;
         if (_currentBalance > _config.lastRecordedBalance) {
             uint256 _protocolShare = ((_currentBalance - _config.lastRecordedBalance) * _config.protocolShareBps)

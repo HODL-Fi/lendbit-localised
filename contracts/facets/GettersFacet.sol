@@ -3,9 +3,11 @@ pragma solidity ^0.8.30;
 
 import {LibAppStorage} from "../libraries/LibAppStorage.sol";
 import {LibProtocol} from "../libraries/LibProtocol.sol";
+import {LibVaultManager} from "../libraries/LibVaultManager.sol";
 
 contract GettersFacet {
     using LibProtocol for LibAppStorage.StorageLayout;
+    using LibVaultManager for LibAppStorage.StorageLayout;
 
     /**
      * @notice Check if a token is supported as collateral
@@ -126,5 +128,29 @@ contract GettersFacet {
     {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return s._getLoanDetails(_loanId);
+    }
+
+    // VaultManager functions
+    function getVaultTotalAssets(address asset) external view returns (uint256) {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        return s._getVaultTotalAssets(asset);
+    }
+
+    function tokenIsSupported(address _token) external view returns (bool) {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        return s._tokenIsSupported(_token);
+    }
+
+    function getTokenVault(address _token) external view returns (address) {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        return s._getTokenVault(_token);
+    }
+
+    // CRE
+    /// @notice Returns the configured forwarder address
+    /// @return The forwarder address (address(0) if disabled)
+    function getForwarderAddress() external view returns (address) {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        return s.s_forwarderAddress;
     }
 }

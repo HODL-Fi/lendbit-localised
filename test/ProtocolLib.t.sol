@@ -31,7 +31,7 @@ contract ProtocolLibTest is Base {
         Loan memory _loan = Loan({
             positionId: 1,
             token: address(0),
-            principal: principal,
+            principal: principal - repaid,
             repaid: repaid,
             outstanding: principal - repaid,
             startTimestamp: block.timestamp,
@@ -43,7 +43,7 @@ contract ProtocolLibTest is Base {
 
         uint256 outstanding = LibProtocol._outstandingBalance(_loan, block.timestamp + 365 days);
 
-        // Expected outstanding balance: ((2000 - 500) + 20% interest p.a) = 1800 ether
+        // Expected outstanding balance: (2000 - 500) + 20% interest p.a  = 1800 ether
         assertEq(outstanding, 1800 ether);
     }
 

@@ -57,12 +57,44 @@ library LibVaultManager {
 
         VaultConfiguration storage _config = s.s_tokenVaultConfig[_token];
 
-        _config.totalDeposits -= _amount;
+        if (_amount > _config.totalDeposits) {
+            _config.totalDeposits = 0;
+        } else {
+            _config.totalDeposits -= _amount;
+        }
 
         _tokenVault.withdraw(_amount, _to, msg.sender);
 
         emit Withdrawal(_positionId, _token, _amount);
     }
+
+    // function _upgradeVault(LibAppStorage.StorageLayout storage s, address _token, VaultConfiguration memory _config)
+    //     internal
+    //     returns (address)
+    // {
+    //     TokenVault _oldVault = s.i_tokenVault[_token];
+    //     if (address(_oldVault) == address(0)) {
+    //         revert TOKEN_NOT_SUPPORTED(_token);
+    //     }
+
+    //     TokenVault _tokenVault =
+    //         new TokenVault(_token, _oldVault.name(), _oldVault.symbol(), address(this), _config.baseRate);
+    //     s.i_tokenVault[_token] = _tokenVault;
+
+    //     s.s_tokenVaultConfig[_token] = VaultConfiguration({
+    //         totalDeposits: 0,
+    //         totalBorrows: 0,
+    //         reserveFactor: _config.reserveFactor,
+    //         baseRate: _config.baseRate,
+    //         slopeRate: _config.slopeRate,
+    //         optimalUtilization: _config.optimalUtilization,
+    //         liquidationBonus: _config.liquidationBonus,
+    //         lastUpdated: block.timestamp
+    //     });
+
+    //     emit TokenAdded(_token, address(_tokenVault));
+    //     return address(_tokenVault);
+    // }
 
     function _deployVault(
         LibAppStorage.StorageLayout storage s,
@@ -79,7 +111,7 @@ library LibVaultManager {
             revert TOKEN_ALREADY_SUPPORTED(_token, address(s.i_tokenVault[_token]));
         }
 
-        TokenVault _tokenVault = new TokenVault(_token, _name, _symbol, address(this));
+        TokenVault _tokenVault = new TokenVault(_token, _name, _symbol, address(this), _config.baseRate);
         s.s_allSupportedTokens.push(_token);
         s.s_supportedToken[_token] = true;
         s.i_tokenVault[_token] = _tokenVault;
@@ -99,6 +131,51 @@ library LibVaultManager {
         emit TokenAdded(_token, address(_tokenVault));
         emit TokenSupportChanged(_token, true);
         return address(_tokenVault);
+    }
+
+    function _setReserveFactor(LibAppStorage.StorageLayout storage s, address _token, uint16 _reserveFactor) internal {
+        if (_reserveFactor == 0) {
+            revert AMOUNT_ZERO();
+        }
+        VaultConfiguration storage _config = s.s_tokenVaultConfig[_token];
+        _config.reserveFactor = _reserveFactor;
+    }
+
+    function _setBaseRate(LibAppStorage.StorageLayout storage s, address _token, uint16 _baseRate) internal {
+        if (_baseRate == 0) {
+            revert AMOUNT_ZERO();
+        }
+        VaultConfiguration storage _config = s.s_tokenVaultConfig[_token];
+        if (_config.slopeRate < _baseRate) revert BAD_RATE();
+        _config.baseRate = _baseRate;
+    }
+
+    function _setSlopeRate(LibAppStorage.StorageLayout storage s, address _token, uint16 _slopeRate) internal {
+        if (_slopeRate == 0) {
+            revert AMOUNT_ZERO();
+        }
+        VaultConfiguration storage _config = s.s_tokenVaultConfig[_token];
+        if (_config.baseRate > _slopeRate) revert BAD_RATE();
+        _config.slopeRate = _slopeRate;
+    }
+
+    function _setOptimalUtilization(LibAppStorage.StorageLayout storage s, address _token, uint16 _optimalUtilization)
+        internal
+    {
+        if (_optimalUtilization == 0) {
+            revert AMOUNT_ZERO();
+        }
+        VaultConfiguration storage _config = s.s_tokenVaultConfig[_token];
+        if (_optimalUtilization < 5000) revert BAD_RATE();
+        _config.optimalUtilization = _optimalUtilization;
+    }
+
+    function _setLiquidationBonus(LibAppStorage.StorageLayout storage s, address _token, uint16 _liquidationBonus)
+        internal
+    {
+        VaultConfiguration storage _config = s.s_tokenVaultConfig[_token];
+        if (_liquidationBonus > 1000) revert BAD_RATE();
+        _config.liquidationBonus = _liquidationBonus;
     }
 
     function _validateVaultUtlization(LibAppStorage.StorageLayout storage s, address _token, uint256 _amount)
@@ -160,6 +237,15 @@ library LibVaultManager {
     {
         TokenVault _tokenVault = s.i_tokenVault[asset];
         if (address(_tokenVault) == address(0)) revert TOKEN_NOT_SUPPORTED(asset);
-        return IERC20(asset).balanceOf(address(this));
+        return _tokenVault.totalAssets();
+    }
+
+    function _getTokenVaultDetails(LibAppStorage.StorageLayout storage s, address _token)
+        internal
+        view
+        returns (uint256, uint256)
+    {
+        TokenVault vault = s.i_tokenVault[_token];
+        return (vault.totalDeposit(), vault.totalBorrow());
     }
 }

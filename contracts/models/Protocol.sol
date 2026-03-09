@@ -14,6 +14,20 @@ struct Loan {
     LoanStatus status;
 }
 
+struct BorrowRequest {
+    string action;
+    uint256 positionId;
+    address token;
+    uint256 amount;
+    uint256 tenureSeconds;
+    uint256 sourceChainId;
+    uint256 targetChainId;
+    uint256 nonce;
+    address contractAddress;
+    address wallet;
+}
+
+
 struct VaultConfiguration {
     uint16 reserveFactor; // in basis points
     uint16 optimalUtilization; // in basis points

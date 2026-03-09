@@ -2,6 +2,8 @@
 pragma solidity ^0.8.30;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 import {LibAppStorage} from "./LibAppStorage.sol";
 import {LibInterestRateModel} from "./LibInterestRateModel.sol";
@@ -92,6 +94,8 @@ library LibProtocol {
         uint256 _loanId = ++s.s_nextLoanId;
         s.s_loans[_loanId] = _loan;
         s.s_positionActiveLoanIds[_positionId].push(_loanId);
+        s.s_loanPrincipal[_loanId] = _principal;
+        s.s_loanStartTime[_loanId] = block.timestamp;
 
         s._updateVaultBorrows(_loan.token, _loan.principal);
 
@@ -100,6 +104,92 @@ library LibProtocol {
 
         emit LoanTaken(_positionId, _loanId, _loan.token, _loan.principal, _loan.tenureSeconds, _loan.annualRateBps);
         return _loanId;
+    }
+
+    function _requestBorrow(
+        LibAppStorage.StorageLayout storage s,
+        BorrowRequest memory _request,
+        bytes memory _signature
+    ) internal returns (uint256) {
+        if (bytes(_request.action).length == 0) revert EMPTY_STRING();
+        if (_request.wallet == address(0) || _request.contractAddress == address(0)) revert ADDRESS_ZERO();
+        if (_request.amount == 0) revert AMOUNT_ZERO();
+        if (!s.s_supportedToken[_request.token]) revert TOKEN_NOT_SUPPORTED(_request.token);
+
+        uint256 _storedPositionId = s._getPositionIdForUser(_request.wallet);
+        if (_storedPositionId == 0) revert NO_POSITION_ID(_request.wallet);
+
+        if (_request.targetChainId != block.chainid) {
+            revert REQUEST_BORROW_TARGET_CHAIN_MISMATCH(block.chainid, _request.targetChainId);
+        }
+        if (_request.contractAddress != address(this)) {
+            revert REQUEST_BORROW_CONTRACT_MISMATCH(address(this), _request.contractAddress);
+        }
+
+        _verifyBorrowSignature(s, _request, _signature);
+
+        if (s.s_requestBorrowNonceUsed[_request.contractAddress][_request.nonce]) {
+            revert REQUEST_BORROW_NONCE_USED(_request.wallet, _request.nonce);
+        }
+        s.s_requestBorrowNonceUsed[_request.contractAddress][_request.nonce] = true;
+
+        Loan memory _loan = Loan({
+            positionId: _request.positionId,
+            token: _request.token,
+            principal: _request.amount,
+            repaid: 0,
+            tenureSeconds: _request.tenureSeconds,
+            startTimestamp: block.timestamp,
+            annualRateBps: s.s_interestRate,
+            penaltyRateBps: s.s_penaltyRate,
+            status: LoanStatus.FULFILLED
+        });
+
+        uint256 _loanId = ++s.s_nextLoanId;
+        s.s_loans[_loanId] = _loan;
+        s.s_loanSpokeChainId[_loanId] = _request.sourceChainId;
+        s.s_positionSpokeActiveLoanIds[_request.positionId][_request.sourceChainId].push(_loanId);
+
+        s._updateVaultBorrows(_loan.token, _loan.principal);
+
+        TokenVault _vault = s.i_tokenVault[_loan.token];
+        _vault.borrow(_request.wallet, _loan.principal);
+
+        emit LoanTaken(
+            _request.positionId, _loanId, _loan.token, _loan.principal, _loan.tenureSeconds, _loan.annualRateBps
+        );
+        return _loanId;
+    }
+
+    function _verifyBorrowSignature(
+        LibAppStorage.StorageLayout storage s,
+        BorrowRequest memory _request,
+        bytes memory _signature
+    ) internal view {
+        if (s.s_requestBorrowSigner == address(0)) {
+            revert REQUEST_BORROW_SIGNER_NOT_SET();
+        }
+
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                _request.action,
+                _request.positionId,
+                _request.token,
+                _request.amount,
+                _request.tenureSeconds,
+                _request.sourceChainId,
+                _request.targetChainId,
+                _request.nonce,
+                _request.contractAddress,
+                _request.wallet
+            )
+        );
+        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
+        address recoveredSigner = ECDSA.recover(ethSignedMessageHash, _signature);
+
+        if (recoveredSigner != s.s_requestBorrowSigner) {
+            revert REQUEST_BORROW_INVALID_SIGNATURE(recoveredSigner);
+        }
     }
 
     function _repayLoanFor(LibAppStorage.StorageLayout storage s, uint256 _positionId, uint256 _loanId, uint256 _amount)
@@ -121,22 +211,37 @@ library LibProtocol {
 
         // Update loan repaid amount
         _loan.repaid += _amount;
-        _loan.outstanding = _loanDebt - _amount;
+        _loan.principal = _loanDebt - _amount;
+        _loan.startTimestamp = block.timestamp;
 
         // If fully repaid, update loan status and move to closed loans
-        if (_loanDebt - _amount == 0) {
+        if (_loan.principal == 0) {
             _loan.status = LoanStatus.REPAID;
-            _removeLoanFromActive(s, _positionId, _loanId);
             s.s_positionClosedLoanIds[_positionId].push(_loanId);
+            if (s.s_loanSpokeChainId[_loanId] != 0) {
+                uint256 spokeChainId = s.s_loanSpokeChainId[_loanId];
+                uint256[] storage activeLoanIds = s.s_positionSpokeActiveLoanIds[_positionId][spokeChainId];
+                for (uint256 i = 0; i < activeLoanIds.length; i++) {
+                    if (activeLoanIds[i] == _loanId) {
+                        activeLoanIds[i] = activeLoanIds[activeLoanIds.length - 1];
+                        activeLoanIds.pop();
+                        break;
+                    }
+                }
+            } else {
+                _removeLoanFromActive(s, _positionId, _loanId);
+            }
         }
 
         s._updateVaultRepays(_loan.token, _amount);
+        TokenVault _vault = s.i_tokenVault[_loan.token];
+        _vault.repay(_amount);
 
-        bool _success = ERC20(_loan.token).transferFrom(msg.sender, address(s.i_tokenVault[_loan.token]), _amount);
+        bool _success = ERC20(_loan.token).transferFrom(msg.sender, address(_vault), _amount);
         if (!_success) revert TRANSFER_FAILED();
 
-        emit LoanRepayment(_positionId, _loanId, _loan.token, _amount);
-        return _loanDebt - _amount;
+        emit LoanRepaymentX(_positionId, _loanId, _loan.token, _amount, uint32(s.s_loanSpokeChainId[_loanId]));
+        return _loan.principal;
     }
 
     function _repayLoan(LibAppStorage.StorageLayout storage s, uint256 _loanId, uint256 _amount)
@@ -195,7 +300,10 @@ library LibProtocol {
         _repayStateChanges(s, _params);
         s._updateVaultRepays(address(_token), _amount);
 
-        bool _success = ERC20(_token).transferFrom(msg.sender, address(s.i_tokenVault[_token]), _amount);
+        TokenVault _vault = s.i_tokenVault[_token];
+        _vault.repay(_amount);
+
+        bool _success = ERC20(_token).transferFrom(msg.sender, address(_vault), _amount);
         if (!_success) revert TRANSFER_FAILED();
 
         emit Repay(_positionId, _token, _amount);
@@ -206,7 +314,7 @@ library LibProtocol {
         uint256 _totalDebt = _calculateUserDebt(s, _params.positionId, _params.token, 0);
         s.s_positionBorrowed[_params.positionId][_params.token] = _totalDebt - _params.amount;
         s.s_positionBorrowedLastUpdate[_params.positionId][_params.token] = block.timestamp;
-        s._updateVaultRepays(_params.token, _params.amount);
+        // s._updateVaultRepays(_params.token, _params.amount);
     }
 
     function _allowanceAndBalanceCheck(address _token, uint256 _amount) internal view {
@@ -333,9 +441,11 @@ library LibProtocol {
         returns (uint256)
     {
         uint256 _totalValue = _getPositionUtilizableCollateralValue(s, _positionId);
-        uint256 remainingCollateral =
-            _totalValue - _getPositionBorrowedValue(s, _positionId) - _totalActiveDebt(s, _positionId);
-        return remainingCollateral;
+        uint256 _debt = _getPositionBorrowedValue(s, _positionId) + _totalActiveDebt(s, _positionId);
+        if (_debt >= _totalValue) {
+            return 0;
+        }
+        return _totalValue - _debt;
     }
 
     function _getPositionUtilizableCollateralValue(LibAppStorage.StorageLayout storage s, uint256 _positionId)
@@ -379,21 +489,6 @@ library LibProtocol {
         }
         return _totalValue;
     }
-
-    // function _getHealthFactor(LibAppStorage.StorageLayout storage s, uint256 _positionId, uint256 _currentBorrowValue)
-    //     internal
-    //     view
-    //     returns (uint256)
-    // {
-    //     uint256 _collateralValue = _getPositionUtilizableCollateralValue(s, _positionId);
-    //     uint256 _borrowedValue = _getPositionBorrowedValue(s, _positionId);
-
-    //     _borrowedValue += _currentBorrowValue;
-
-    //     if (_borrowedValue == 0) return (_collateralValue * Constants.PRECISION); // No debt means max health factor
-
-    //     return _collateralValue * Constants.PRECISION / _borrowedValue; // Health factor with 18 decimals
-    // }
 
     function _getHealthFactor(LibAppStorage.StorageLayout storage s, uint256 _positionId, uint256 _currentBorrowValue)
         internal
@@ -470,10 +565,6 @@ library LibProtocol {
             uint256 penalty = (_loan.outstanding * (_loan.annualRateBps + _loan.penaltyRateBps) * penaltyTime)
                 / (Constants.BASIS_POINTS_SCALE_256 * 365 days);
             _totalOwed += penalty;
-        }
-
-        if (_totalOwed <= _loan.repaid) {
-            return 0;
         }
 
         return _totalOwed;
@@ -560,10 +651,10 @@ library LibProtocol {
         return (
             loan.positionId,
             loan.token,
-            loan.principal,
+            loan.principal == 0 ? s.s_loanPrincipal[_loanId] : loan.principal,
             loan.repaid,
             loan.tenureSeconds,
-            loan.startTimestamp,
+            s.s_loanStartTime[_loanId] == 0 ? loan.startTimestamp : s.s_loanStartTime[_loanId],
             _outstandingBalance(loan, block.timestamp),
             loan.annualRateBps,
             loan.penaltyRateBps,

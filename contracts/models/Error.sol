@@ -14,11 +14,19 @@ error TOKEN_ALREADY_SUPPORTED(address asset, address assetVault);
 error TOKEN_ALREADY_SUPPORTED_AS_COLLATERAL(address asset);
 error TOKEN_NOT_SUPPORTED_AS_COLLATERAL(address asset);
 
+error REQUEST_BORROW_SIGNER_NOT_SET();
+error REQUEST_BORROW_INVALID_SIGNATURE(address recovered);
+error REQUEST_BORROW_NONCE_USED(address wallet, uint256 nonce);
+error REQUEST_BORROW_TARGET_CHAIN_MISMATCH(uint256 expected, uint256 provided);
+error REQUEST_BORROW_CONTRACT_MISMATCH(address expected, address provided);
+
 error AMOUNT_ZERO();
+error BAD_RATE();
 error AMOUNT_MISMATCH(uint256 given, uint256 expected);
 error TRANSFER_FAILED();
 error INSUFFICIENT_ALLOWANCE();
 error INSUFFICIENT_BALANCE();
+error INSUFFICIENT_COLLATERAL();
 error HEALTH_FACTOR_TOO_LOW(uint256 healthFactor);
 error NOT_LIQUIDATABLE();
 error NO_ACTIVE_BORROW_FOR_TOKEN(uint256 positionId, address token);
@@ -37,6 +45,7 @@ error CURRENCY_NOT_SUPPORTED(string currency);
 
 error STALE_PRICE_FEED(address priceFeed);
 error INVALID_PRICE_FEED(address priceFeed);
+error ZERO_PRICE_DATA();
 
 error YIELD_ALLOCATION_TOO_HIGH(uint16 bps);
 error YIELD_NOT_ENABLED(address token);
@@ -47,3 +56,11 @@ error YIELD_LIQUIDITY_DEFICIT(address token, uint256 deficit);
 // chainlink functions error
 error OnlyRouterCanFulfill();
 error UnexpectedRequestID(bytes32 requestId);
+
+// CRE Custom errors
+error InvalidForwarderAddress();
+error InvalidSender(address sender, address expected);
+error InvalidAuthor(address received, address expected);
+error InvalidWorkflowName(bytes10 received, bytes10 expected);
+error InvalidWorkflowId(bytes32 received, bytes32 expected);
+error WorkflowNameRequiresAuthorValidation();

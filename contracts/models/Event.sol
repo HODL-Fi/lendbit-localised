@@ -42,6 +42,7 @@ event LoanTaken(
     uint16 annualRateBps
 );
 event LoanRepayment(uint256 indexed positionId, uint256 indexed loanId, address indexed token, uint256 amount);
+event LoanRepaymentX(uint256 indexed positionId, uint256 indexed loanId, address indexed token, uint256 amount, uint32 spokeChainId);
 event LoanLiquidated(
     uint256 indexed positionId,
     uint256 indexed loandId,
@@ -70,3 +71,10 @@ event Response(bytes32 indexed requestId, uint256 priceData, bytes response, byt
 event FunctionsRouterChanged(address indexed securityCouncil, bytes32 donId, address router);
 
 event FunctionsSourceChanged(address indexed securityCouncil, bytes source);
+
+// CRE EVENTS
+event ForwarderAddressUpdated(address indexed previousForwarder, address indexed newForwarder);
+event ExpectedAuthorUpdated(address indexed previousAuthor, address indexed newAuthor);
+event ExpectedWorkflowNameUpdated(bytes10 indexed previousName, bytes10 indexed newName);
+event ExpectedWorkflowIdUpdated(bytes32 indexed previousId, bytes32 indexed newId);
+event SecurityWarning(string message);
