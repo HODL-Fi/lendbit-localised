@@ -39,6 +39,13 @@ library LibLiquidation {
         if (_loan.status != LoanStatus.FULFILLED) revert INACTIVE_LOAN();
         _liquidationCheck(s, _loan.positionId, _loan.token, _collateralToken, _amount);
 
+        // Update loan repaid amount
+        uint256 _loanDebt = s._outstandingBalance(_loanId, block.timestamp);
+
+        if (_amount > _loanDebt) {
+            _amount = _loanDebt;
+        }
+
         uint256 _amountToLiquidate = _getAmountToLiquidate(s, _collateralToken, _loan.token, _amount);
         if (_amountToLiquidate > s.s_positionCollateral[_loan.positionId][_collateralToken]) {
             revert INSUFFICIENT_COLLATERAL();
@@ -47,13 +54,6 @@ library LibLiquidation {
         s.s_positionCollateral[_loan.positionId][_collateralToken] -= _amountToLiquidate;
         LibYieldStrategy._rebalancePosition(s, _loan.positionId, _collateralToken);
         LibYieldStrategy._ensureSufficientIdle(s, _loan.positionId, _collateralToken, _amountToLiquidate);
-
-        // Update loan repaid amount
-        uint256 _loanDebt = s._outstandingBalance(_loanId, block.timestamp);
-
-        if (_amount > _loanDebt) {
-            _amount = _loanDebt;
-        }
 
         // update outstanding loan here
         _loan.repaid += _amount;

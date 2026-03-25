@@ -490,6 +490,8 @@ contract LiquidationTest is Base {
         address _debtToken = address(token3);
         uint256 _amount = 1000e6;
 
+        defaultConfig.liquidationBonus = 1000;
+
         s.s_supportedCollateralTokens[_collateralToken] = true;
         s.s_supportedToken[_debtToken] = true;
         s.s_tokenPriceFeed[_collateralToken] = pricefeed1;
@@ -505,5 +507,52 @@ contract LiquidationTest is Base {
 
         assertEq(_amountToLiquidate, (_amount * 110 / 100));
         assertEq(_amountToLiquidate2, 733333333333333332); // 0.6666... token 1 == $1000 + 10% (0.0666...) -> 0.7333...
+    }
+
+    function testSendingMoreAmountThanDebtOnlyLiquidateTheDebtValue() public {
+        protocolF.addCollateralToken(address(token3), pricefeed3, baseTokenLTV);
+        createVaultAndFund(100e6); // $250/token = $25,000
+        // --- Setup: borrower has $10,000 collateral, takes loan close to liquidation threshold ---
+        uint256 _positionId = depositCollateralFor(user1, address(token3), 10_000e6);
+        vm.startPrank(user1);
+        uint256 loanId = protocolF.takeLoan(address(token4), 20e6, 30 days);
+        protocolF.takeLoan(address(token4), 10e6, 30 days); // drive position close to liquidation
+        vm.stopPrank();
+
+        // --- Fast-forward so position becomes liquidatable ---
+        vm.warp(block.timestamp + 365 days);
+        MockV3Aggregator(pricefeed3).updateAnswer(0.9e8);
+
+        // Verify position is liquidatable
+        assertTrue(liquidationF.isLiquidatable(_positionId));
+
+        // Record balances before liquidation
+        uint256 collateralBefore = gettersF.getPositionCollateral(_positionId, address(token3));
+        uint256 loanDebt = gettersF.getOutstandingDebtForLoan(loanId);
+
+        uint256 _liquidationAmount = 50e6;
+        mintTokenTo(address(token4), liquidator, _liquidationAmount);
+        // --- Exploit: liquidator passes type(uint256).max as _amount ---
+        vm.startPrank(liquidator);
+        token4.approve(address(diamond), _liquidationAmount);
+
+        // The liquidator calls with a hugely inflated amount
+        liquidationF.liquidateLoan(
+            loanId,
+            _liquidationAmount, // <-- uncapped, inflates collateral seizure
+            address(token3)
+        );
+        vm.stopPrank();
+
+        // --- Verify: borrower losses the collateral needed to pay off debt and liquidation bonus ---
+        uint256 collateralAfter = gettersF.getPositionCollateral(_positionId, address(token3));
+
+        // The liquidator receives collateral worth <= loanDebt + liquidationBonus
+        uint256 _liquidatorBalance = token3.balanceOf(liquidator);
+        (, uint256 _debtValue) = priceOracleF.getTokenValueInUSD(address(token4), loanDebt);
+        (, uint256 _liquidatedValue) = priceOracleF.getTokenValueInUSD(address(token3), _liquidatorBalance);
+        assertLt(collateralAfter, collateralBefore);
+        assertLt(collateralAfter, collateralBefore);
+        assertGe(_debtValue * 105 / 100, _liquidatedValue);
     }
 }

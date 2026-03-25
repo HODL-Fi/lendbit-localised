@@ -59,7 +59,7 @@ contract Base is Test, IDiamondCut {
         slopeRate: 1500,
         reserveFactor: 2000,
         optimalUtilization: 7500,
-        liquidationBonus: 1000,
+        liquidationBonus: 500,
         lastUpdated: block.timestamp
     });
 
@@ -200,7 +200,7 @@ contract Base is Test, IDiamondCut {
         if (_token == address(1)) {
             vm.deal(_user, _amount);
         } else {
-            token1.mint(_user, _amount);
+            ERC20Mock(_token).mint(_user, _amount);
         }
         vm.startPrank(_user);
         if (_token == address(1)) {
