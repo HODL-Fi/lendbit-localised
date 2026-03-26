@@ -838,6 +838,41 @@ contract ProtocolTest is Base {
         );
     }
 
+    function testRequestBorrowFailsWitPositionIdMismatch() public {
+        createVaultAndFund(1000000e18);
+        uint256 collateralAmount = 10000 * 1e18;
+        uint256 borrowAmount = 1000 * 1e6;
+        uint256 tenure = 30 days;
+
+        uint256 positionId = depositCollateralFor(user1, address(token1), collateralAmount);
+
+        uint256 signerPrivateKey = 0xA11CE;
+        address signer = vm.addr(signerPrivateKey);
+        positionManagerF.setRequestBorrowSigner(signer);
+
+        BorrowRequest memory request = BorrowRequest({
+            action: "BORROW_REQUEST",
+            positionId: positionId + 1,
+            token: address(token4),
+            amount: borrowAmount,
+            tenureSeconds: tenure,
+            sourceChainId: block.chainid,
+            targetChainId: block.chainid,
+            nonce: 1,
+            contractAddress: address(protocolF),
+            wallet: user1
+        });
+
+        bytes32 digest = _borrowRequestDigest(request);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        vm.startPrank(user1);
+        vm.expectRevert(abi.encodeWithSelector(POSITION_ID_MISMATCH.selector, positionId, positionId + 1));
+        protocolF.requestBorrow(request, signature);
+        vm.stopPrank();
+    }
+
     // =============================================================
     //                  TAKE TENURED LOAN TESTS
     // =============================================================

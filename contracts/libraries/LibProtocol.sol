@@ -118,6 +118,10 @@ library LibProtocol {
         uint256 _storedPositionId = s._getPositionIdForUser(_request.wallet);
         if (_storedPositionId == 0) revert NO_POSITION_ID(_request.wallet);
 
+        if (_storedPositionId != _request.positionId) {
+            revert POSITION_ID_MISMATCH(_storedPositionId, _request.positionId);
+        }
+
         if (_request.targetChainId != block.chainid) {
             revert REQUEST_BORROW_TARGET_CHAIN_MISMATCH(block.chainid, _request.targetChainId);
         }
