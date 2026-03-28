@@ -243,9 +243,9 @@ contract VaultManagerTest is Base {
     function testSetBaseRateRevertsIfSlopeLower() public {
         address _token = address(token1);
         // set slopeRate to 500 first
-        vaultManagerF.setSlopeRate(_token, 500);
+        vaultManagerF.setSlopeRate(_token, 2000);
         vm.expectRevert(abi.encodeWithSelector(BAD_RATE.selector));
-        vaultManagerF.setBaseRate(_token, 600);
+        vaultManagerF.setBaseRate(_token, 2500);
     }
 
     function testSetBaseRateRevertsIfNotCouncil() public {
@@ -288,7 +288,7 @@ contract VaultManagerTest is Base {
 
     function testSetOptimalUtilization() public {
         address _token = address(token1);
-        uint16 newOptimalUtilization = 8000;
+        uint16 newOptimalUtilization = 9000;
         VaultConfiguration memory beforeConfig = vaultManagerF.getTokenVaultConfig(_token);
         assertTrue(beforeConfig.optimalUtilization != newOptimalUtilization);
         vaultManagerF.setOptimalUtilization(_token, newOptimalUtilization);

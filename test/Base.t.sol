@@ -55,10 +55,10 @@ contract Base is Test, IDiamondCut {
     VaultConfiguration defaultConfig = VaultConfiguration({
         totalDeposits: 0,
         totalBorrows: 0,
-        baseRate: 500,
-        slopeRate: 1500,
+        baseRate: 2000,
+        slopeRate: 3000,
         reserveFactor: 2000,
-        optimalUtilization: 7500,
+        optimalUtilization: 8000,
         liquidationBonus: 500,
         lastUpdated: block.timestamp
     });

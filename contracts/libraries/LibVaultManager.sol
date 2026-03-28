@@ -239,4 +239,13 @@ library LibVaultManager {
         if (address(_tokenVault) == address(0)) revert TOKEN_NOT_SUPPORTED(asset);
         return _tokenVault.totalAssets();
     }
+
+    function _getTokenVaultDetails(LibAppStorage.StorageLayout storage s, address _token)
+        internal
+        view
+        returns (uint256, uint256)
+    {
+        TokenVault vault = s.i_tokenVault[_token];
+        return (vault.totalDeposit(), vault.totalBorrow());
+    }
 }

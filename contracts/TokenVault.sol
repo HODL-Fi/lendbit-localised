@@ -340,6 +340,14 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         return _interest;
     }
 
+    function totalDeposit() external view returns (uint256) {
+        return totalDeposits;
+    }
+
+    function totalBorrow() external view returns (uint256) {
+        return totalBorrows;
+    }
+
     // Events
     event PausedStateChanged(bool paused);
     event ExchangeRateUpdated(uint256 newRate);

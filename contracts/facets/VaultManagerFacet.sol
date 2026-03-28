@@ -84,8 +84,9 @@ contract VaultManagerFacet {
 
     function getTokenVaultDetails(address _token) external view returns (uint256, uint256) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
-        VaultConfiguration memory _config = s.s_tokenVaultConfig[_token];
-        return (_config.totalDeposits, _config.totalBorrows);
+        // VaultConfiguration memory _config = s.s_tokenVaultConfig[_token];
+        // return (_config.totalDeposits, _config.totalBorrows);
+        return s._getTokenVaultDetails(_token);
     }
 
     modifier onlySecurityCouncil() {

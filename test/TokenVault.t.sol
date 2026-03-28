@@ -14,6 +14,7 @@ import {Base, ERC20Mock} from "./Base.t.sol";
 // import "../contracts/models/Event.sol";
 
 import {TokenVault} from "../contracts/TokenVault.sol";
+// import {console} from "forge-std/console.sol";
 
 contract TokenVaultTest is Base {
     address linkHolder = 0x4281eCF07378Ee595C564a59048801330f3084eE; //sepolia
@@ -125,14 +126,14 @@ contract TokenVaultTest is Base {
         token3.transfer(address(tokenVault), _amount);
         tokenVault.repay(_amount);
 
-        vm.warp(block.timestamp + 365 days / 2);
+        vm.warp(365 days + 1); // for some reason using block.timestamp + 365 days / 2 still returns the old timestamp, so hardcoding it here
 
         assertEq(tokenVault.totalAssets(), (470_000e6 + 10_000e6));
 
         token3.transfer(address(tokenVault), _amount / 2);
         tokenVault.repay(_amount / 2);
 
-        vm.warp(block.timestamp + 365 days / 2);
+        vm.warp(365 days + 1 + (365 days / 2)); // warp another 6 months to accrue more interest on the remaining loan
 
         assertEq(tokenVault.totalAssets(), (480_000e6 + 5_000e6));
     }
@@ -216,7 +217,8 @@ contract TokenVaultTest is Base {
         token3.transfer(address(tokenVault), _amount);
         tokenVault.repay(_amount);
 
-        vm.warp(block.timestamp + 365 days / 2);
+        vm.warp(365 days + 1); // for some reason using block.timestamp + 365 days / 2 still returns the old timestamp, so hardcoding it here
+        assertEq(block.timestamp, 365 days + 1);
 
         // expected if repay applied to accrued interest first
         assertEq(tokenVault.totalAssets(), 480_000e6);
@@ -581,5 +583,56 @@ contract TokenVaultTest is Base {
 
         uint256 expectedTotalAssets = _amount * 2;
         assertEq(tokenVault.totalAssets(), expectedTotalAssets);
+    }
+
+    function testVaultTotalBorrowsWithDebtsAndRepay() public {
+        createVaultAndFund(500e6);
+        TokenVault vault = TokenVault(gettersF.getTokenVault(address(token4)));
+        uint256 _amount = 100_000e18;
+        token2.mint(user1, _amount * 6);
+        token4.mint(user1, 200e6);
+
+        vm.startPrank(user1);
+        token2.approve(address(diamond), type(uint256).max);
+        token4.approve(address(diamond), type(uint256).max);
+        protocolF.depositCollateral(address(token2), _amount);
+
+        uint256 _loanId = protocolF.takeLoan(address(token4), 200e6, 365 days);
+        // vm.stopPrank();
+
+        vm.warp(block.timestamp + 365 days / 2);
+
+        // vaultManagerF.getTokenVaultDetails(address(token4));
+        // vault.totalBorrow();
+
+        assertEq(vault.totalAssets(), (500e6 + 20e6));
+        assertEq(token4.balanceOf(address(vault)), 300e6);
+
+        token4.transfer(address(vault), 100e6);
+        protocolF.repayLoan(_loanId, 100e6);
+
+        (uint256 _deposits, uint256 _borrows) = vaultManagerF.getTokenVaultDetails(address(token4));
+        assertEq(_deposits, 520e6);
+        assertEq(_borrows, 100e6); // after repayment
+        uint256 _assets = vault.totalAssets();
+        assertEq(_assets, (500e6 + 100e6 + 20e6)); // after repayment, total assets should be deposits + transfers + remaining borrows + accrued interest
+
+        vm.warp(365 days + 1); // for some reason using block.timestamp + 365 days / 2 still returns the old timestamp, so hardcoding it here
+
+        assertEq(vault.totalAssets(), (500e6 + 100e6 + 20e6 + 10e6));
+        (,,, uint256 repaid,,, uint256 debt,,,) = gettersF.getLoanDetails(_loanId);
+        assertEq(repaid, 100e6);
+        assertEq(debt, 132e6); // after 6 months, 10e6 interest should have accrued on the remaining 100e6 borrow
+
+        protocolF.repayLoan(_loanId, debt); // repay the rest of the loan
+        vm.stopPrank();
+
+        vm.warp(365 days + 1 + (365 days / 2)); // warp another 6 months to accrue more interest on the remaining loan
+
+        assertEq(vault.totalAssets(), (500e6 + 100e6 + 20e6 + 12e6));
+        assertEq(vault.totalBorrow(), 0);
+        assertEq(vault.totalDeposit(), 500e6);
+        vaultManagerF.getTokenVaultDetails(address(token4));
+        vaultManagerF.getTokenVaultConfig(address(token4));
     }
 }

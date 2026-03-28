@@ -51,7 +51,7 @@ contract LiquidationTest is Base {
         uint256 _debt = gettersF.getBorrowDetails(_positionId, address(token4));
 
         // Make position liquidatable
-        MockV3Aggregator(pricefeed1).updateAnswer(1110e8);
+        MockV3Aggregator(pricefeed1).updateAnswer(1300e8);
 
         assertTrue(liquidationF.isLiquidatable(_positionId));
 
@@ -92,7 +92,7 @@ contract LiquidationTest is Base {
         vm.warp(block.timestamp + 365 days);
 
         // Make position liquidatable
-        MockV3Aggregator(pricefeed1).updateAnswer(1110e8);
+        MockV3Aggregator(pricefeed1).updateAnswer(1300e8);
 
         assertTrue(liquidationF.isLiquidatable(_positionId));
 

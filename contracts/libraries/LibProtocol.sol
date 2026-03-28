@@ -303,7 +303,7 @@ library LibProtocol {
         uint256 _totalDebt = _calculateUserDebt(s, _params.positionId, _params.token, 0);
         s.s_positionBorrowed[_params.positionId][_params.token] = _totalDebt - _params.amount;
         s.s_positionBorrowedLastUpdate[_params.positionId][_params.token] = block.timestamp;
-        // s._updateVaultRepays(_params.token, _params.amount);
+        s._updateVaultRepays(_params.token, _params.amount);
     }
 
     function _allowanceAndBalanceCheck(address _token, uint256 _amount) internal view {
