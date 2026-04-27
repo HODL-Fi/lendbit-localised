@@ -611,10 +611,10 @@ contract TokenVaultTest is Base {
         token4.transfer(address(vault), 100e6);
         protocolF.repayLoan(_loanId, 100e6);
 
-        (uint256 _deposits, uint256 _borrows) = vaultManagerF.getTokenVaultDetails(address(token4));
-        assertEq(_deposits, 520e6);
+        (uint256 _totalAssets, uint256 _borrows) = vaultManagerF.getTokenVaultDetails(address(token4));
         assertEq(_borrows, 100e6); // after repayment
         uint256 _assets = vault.totalAssets();
+        assertEq(_totalAssets, _assets);
         assertEq(_assets, (500e6 + 100e6 + 20e6)); // after repayment, total assets should be deposits + transfers + remaining borrows + accrued interest
 
         vm.warp(365 days + 1); // for some reason using block.timestamp + 365 days / 2 still returns the old timestamp, so hardcoding it here
@@ -631,8 +631,35 @@ contract TokenVaultTest is Base {
 
         assertEq(vault.totalAssets(), (500e6 + 100e6 + 20e6 + 12e6));
         assertEq(vault.totalBorrow(), 0);
-        assertEq(vault.totalDeposit(), 500e6);
         vaultManagerF.getTokenVaultDetails(address(token4));
         vaultManagerF.getTokenVaultConfig(address(token4));
     }
+
+    // function testSetInterestRate() public {
+    //     createVaultAndFund(0);
+    //     TokenVault vault = TokenVault(gettersF.getTokenVault(address(token4)));
+    //     uint256 _amount = 100_000e18;
+    //     token2.mint(user1, _amount * 6);
+    //     token4.mint(user1, 200e6);
+
+    //     vm.startPrank(user1);
+    //     token2.approve(address(diamond), type(uint256).max);
+    //     token4.approve(address(diamond), type(uint256).max);
+    //     protocolF.depositCollateral(address(token2), _amount);
+
+    //     uint256 _loanId = protocolF.takeLoan(address(token4), 200e6, 365 days);
+    //     vm.stopPrank();
+
+    //     vm.warp(block.timestamp + 365 days / 2);
+
+    //     assertEq(vault.totalAssets(), (500e6 + 20e6));
+    //     assertEq(token4.balanceOf(address(vault)), 300e6);
+
+    //     vm.prank(address(diamond));
+    //     vault.setInterestRate(4000); // increase interest rate to 40%
+
+    //     vm.warp(365 days + 1); // for some reason using block.timestamp + 365 days / 2 still returns the old timestamp, so hardcoding it here
+
+    //     assertEq(vault.totalAssets(), (500e6 + 100e6 + 20e6 + 40e6)); // after repayment, total assets should be deposits + transfers + remaining borrows + accrued interest
+    // }
 }

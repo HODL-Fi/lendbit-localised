@@ -18,8 +18,8 @@ contract TokenVault is ERC4626, ReentrancyGuard {
 
     // Custom errors
     error InvalidAddressZero();
-    error InvalidRateCanOnlyIncrease();
     error InvalidAmount();
+    error InvalidRate();
     error VaultPaused();
     error OnlyDiamond();
     error InsufficientShares();
@@ -31,10 +31,10 @@ contract TokenVault is ERC4626, ReentrancyGuard {
     error OnlyWETHContract();
 
     uint16 private interestRate;
-    uint256 private totalDeposits;
     uint256 private totalBorrows;
-    uint256 private totalBadDebt;
     uint256 private totalAccruedInterest;
+    /// @dev purely historical metric, NOT used in valuation
+    uint256 private totalBadDebt;
 
     /// @notice Protocol diamond address
     address public immutable diamond;
@@ -117,7 +117,7 @@ contract TokenVault is ERC4626, ReentrancyGuard {
      * @return Total amount of underlying assets
      */
     function totalAssets() public view override returns (uint256) {
-        uint256 _interest = _interestAccrued();
+        uint256 _interest = _pendingInterest();
         uint256 _balance = IERC20(asset()).balanceOf(address(this));
 
         return _balance + totalBorrows + totalAccruedInterest + _interest;
@@ -140,12 +140,10 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         returns (uint256 shares)
     {
         // accrue interest up to now (non-compounding)
-        uint256 _accrued = _interestAccrued();
-        totalAccruedInterest = totalAccruedInterest + _accrued;
-        lastUpdateTimestamp = block.timestamp;
+        _accrueInterest();
 
         // Calculate shares (based on snapshot after accrual, before transfer)
-        shares = convertToShares(assets);
+        shares = previewDeposit(assets);
         if (shares == 0) revert InvalidAmount();
 
         // Transfer assets from sender to this vault
@@ -153,9 +151,6 @@ contract TokenVault is ERC4626, ReentrancyGuard {
 
         // Mint shares to receiver
         _mint(receiver, shares);
-
-        // snapshot deposits from on-chain state (includes direct transfers)
-        totalDeposits = totalAssets();
 
         emit Deposit(msg.sender, receiver, assets, shares);
         return shares;
@@ -179,12 +174,10 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         returns (uint256 shares)
     {
         // accrue interest up to now (non-compounding)
-        uint256 _accrued = _interestAccrued();
-        totalAccruedInterest = totalAccruedInterest + _accrued;
-        lastUpdateTimestamp = block.timestamp;
+        _accrueInterest();
 
         // Calculate shares needed
-        shares = convertToShares(assets);
+        shares = previewWithdraw(assets);
         if (shares == 0) revert InvalidAmount();
 
         // Check if owner has enough shares
@@ -195,8 +188,8 @@ contract TokenVault is ERC4626, ReentrancyGuard {
             _spendAllowance(owner, msg.sender, shares);
         }
 
-        uint256 _totalAssets = totalAssets();
-        if (_totalAssets < assets) {
+        uint256 _balance = IERC20(asset()).balanceOf(address(this));
+        if (_balance < assets) {
             revert InsufficientBalance();
         }
 
@@ -204,11 +197,7 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         _burn(owner, shares);
 
         // Transfer assets to receiver
-        bool success = IERC20(asset()).transfer(receiver, assets);
-        if (!success) revert TransferFailed();
-
-        // snapshot deposits from on-chain state
-        totalDeposits = totalAssets();
+        IERC20(asset()).safeTransfer(receiver, assets);
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
         return shares;
@@ -216,27 +205,23 @@ contract TokenVault is ERC4626, ReentrancyGuard {
 
     function borrow(address receiver, uint256 amount) external onlyDiamond {
         // accrue interest into non-compounding bucket
-        uint256 _accrued = _interestAccrued();
-        totalAccruedInterest = totalAccruedInterest + _accrued;
-        lastUpdateTimestamp = block.timestamp;
-
-        // ensure vault has liquidity to lend
-        if (IERC20(asset()).balanceOf(address(this)) < amount) revert InsufficientBalance();
+        _accrueInterest();
 
         // increase principal borrows (non-compounding)
         totalBorrows = totalBorrows + amount;
 
+        // ensure vault has liquidity to lend
+        if (IERC20(asset()).balanceOf(address(this)) < amount) revert InsufficientBalance();
+
         // transfer funds out
         IERC20(asset()).safeTransfer(receiver, amount);
 
-        totalDeposits = totalAssets();
+        emit Borrow(_msgSender(), amount);
     }
 
-    function repay(uint256 amount) external onlyDiamond {
+    function repay(uint256 amount) external onlyDiamond validAmount(amount) {
         // accrue interest into non-compounding bucket
-        uint256 _accrued = _interestAccrued();
-        totalAccruedInterest = totalAccruedInterest + _accrued;
-        lastUpdateTimestamp = block.timestamp;
+        _accrueInterest();
 
         // apply repayment to principal first, then to accrued interest
         if (amount >= totalBorrows) {
@@ -257,7 +242,7 @@ contract TokenVault is ERC4626, ReentrancyGuard {
             }
         }
 
-        totalDeposits = totalAssets();
+        emit Repay(_msgSender(), amount);
     }
 
     /**
@@ -285,17 +270,14 @@ contract TokenVault is ERC4626, ReentrancyGuard {
     }
 
     function setInterestRate(uint16 rate) external onlyDiamond {
-        totalDeposits = totalAssets();
-        totalAccruedInterest = totalAccruedInterest + _interestAccrued();
-        lastUpdateTimestamp = block.timestamp;
+        if (rate > 10000) revert InvalidRate(); // max 100% interest rate
+        _accrueInterest();
         interestRate = rate;
     }
 
     function updateBadDebt(uint256 amount) external onlyDiamond validAmount(amount) {
         // accrue interest before updating bad debt
-        uint256 _accrued = _interestAccrued();
-        totalAccruedInterest = totalAccruedInterest + _accrued;
-        lastUpdateTimestamp = block.timestamp;
+        _accrueInterest();
 
         uint256 _totalBorrowedWithInterest = totalBorrows + totalAccruedInterest;
 
@@ -329,19 +311,26 @@ contract TokenVault is ERC4626, ReentrancyGuard {
             }
         }
 
-        totalDeposits = totalAssets();
-
         emit BadDebtUpdated(amount, totalBadDebt);
     }
 
-    function _interestAccrued() internal view returns (uint256) {
+    function _accrueInterest() internal {
+        uint256 timeElapsed = block.timestamp - lastUpdateTimestamp;
+        if (timeElapsed == 0) return;
+
+        uint256 interest = (totalBorrows * interestRate * timeElapsed) / (Constants.BASIS_POINTS_SCALE_256 * 365 days);
+
+        if (interest > 0) {
+            totalAccruedInterest += interest;
+        }
+
+        lastUpdateTimestamp = block.timestamp;
+    }
+
+    function _pendingInterest() internal view returns (uint256) {
         uint256 _timeElapsed = block.timestamp - lastUpdateTimestamp;
         uint256 _interest = (totalBorrows * interestRate * _timeElapsed) / (Constants.BASIS_POINTS_SCALE_256 * 365 days);
         return _interest;
-    }
-
-    function totalDeposit() external view returns (uint256) {
-        return totalDeposits;
     }
 
     function totalBorrow() external view returns (uint256) {
@@ -352,4 +341,6 @@ contract TokenVault is ERC4626, ReentrancyGuard {
     event PausedStateChanged(bool paused);
     event ExchangeRateUpdated(uint256 newRate);
     event BadDebtUpdated(uint256 amount, uint256 totalBadDebt);
+    event Borrow(address indexed to, uint256 amount);
+    event Repay(address indexed from, uint256 amount);
 }

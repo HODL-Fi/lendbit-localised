@@ -246,6 +246,6 @@ library LibVaultManager {
         returns (uint256, uint256)
     {
         TokenVault vault = s.i_tokenVault[_token];
-        return (vault.totalDeposit(), vault.totalBorrow());
+        return (vault.totalAssets(), vault.totalBorrow());
     }
 }
