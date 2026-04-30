@@ -225,10 +225,10 @@ library LibProtocol {
             s.s_positionClosedLoanIds[_positionId].push(_loanId);
         }
 
+        TokenVault _vault = s.i_tokenVault[_loan.token];
         IERC20(_loan.token).safeTransferFrom(msg.sender, address(_vault), _amount);
 
         s._updateVaultRepays(_loan.token, _amount);
-        TokenVault _vault = s.i_tokenVault[_loan.token];
         _vault.repay(_amount);
 
         emit LoanRepayment(_positionId, _loanId, _loan.token, _amount);
@@ -277,7 +277,7 @@ library LibProtocol {
     function _repay(LibAppStorage.StorageLayout storage s, address _token, uint256 _amount) internal returns (uint256) {
         uint256 _positionId = _positionIdCheck(s);
 
-        uint256 _debt = s.s_positionBorrowed[_positionId][_token];
+        uint256 _debt = _calculateUserDebt(s, _positionId, _token, 0);
         if (_debt == 0) revert NO_OUTSTANDING_DEBT(_positionId, _token);
 
         _allowanceAndBalanceCheck(_token, _amount);
