@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
@@ -25,6 +26,8 @@ library LibProtocol {
     using LibPriceOracle for LibAppStorage.StorageLayout;
     using LibVaultManager for LibAppStorage.StorageLayout;
 
+    using SafeERC20 for IERC20;
+
     function _depositCollateral(LibAppStorage.StorageLayout storage s, address _token, uint256 _amount) internal {
         _validateAmount(_token, _amount);
         uint256 _positionId = s._getPositionIdForUser(msg.sender);
@@ -38,8 +41,7 @@ library LibProtocol {
         s.s_positionCollateral[_positionId][_token] += _amount;
 
         if (_token != Constants.NATIVE_TOKEN) {
-            bool _success = ERC20(_token).transferFrom(msg.sender, address(this), _amount);
-            if (!_success) revert TRANSFER_FAILED();
+            IERC20(_token).safeTransferFrom(msg.sender, address(this), _amount);
         }
 
         LibYieldStrategy._rebalancePosition(s, _positionId, _token);
@@ -223,12 +225,11 @@ library LibProtocol {
             s.s_positionClosedLoanIds[_positionId].push(_loanId);
         }
 
+        IERC20(_loan.token).safeTransferFrom(msg.sender, address(_vault), _amount);
+
         s._updateVaultRepays(_loan.token, _amount);
         TokenVault _vault = s.i_tokenVault[_loan.token];
         _vault.repay(_amount);
-
-        bool _success = ERC20(_loan.token).transferFrom(msg.sender, address(_vault), _amount);
-        if (!_success) revert TRANSFER_FAILED();
 
         emit LoanRepayment(_positionId, _loanId, _loan.token, _amount);
         return _loan.principal;
@@ -292,8 +293,7 @@ library LibProtocol {
         TokenVault _vault = s.i_tokenVault[_token];
         _vault.repay(_amount);
 
-        bool _success = ERC20(_token).transferFrom(msg.sender, address(_vault), _amount);
-        if (!_success) revert TRANSFER_FAILED();
+        IERC20(_token).safeTransferFrom(msg.sender, address(_vault), _amount);
 
         emit Repay(_positionId, _token, _amount);
         return _calculateUserDebt(s, _positionId, _token, 0);
@@ -310,8 +310,8 @@ library LibProtocol {
         if (_token == address(0)) revert ADDRESS_ZERO();
         if (_amount == 0) revert AMOUNT_ZERO();
         if (_token != Constants.NATIVE_TOKEN) {
-            if (ERC20(_token).allowance(msg.sender, address(this)) < _amount) revert INSUFFICIENT_ALLOWANCE();
-            if (ERC20(_token).balanceOf(msg.sender) < _amount) revert INSUFFICIENT_BALANCE();
+            if (IERC20(_token).allowance(msg.sender, address(this)) < _amount) revert INSUFFICIENT_ALLOWANCE();
+            if (IERC20(_token).balanceOf(msg.sender) < _amount) revert INSUFFICIENT_BALANCE();
         } else {
             if (msg.value < _amount) revert AMOUNT_MISMATCH(msg.value, _amount);
         }
@@ -577,8 +577,7 @@ library LibProtocol {
             if (!sent) revert TRANSFER_FAILED();
             return;
         } else {
-            bool _success = ERC20(_token).transfer(_to, _amount);
-            if (!_success) revert TRANSFER_FAILED();
+            IERC20(_token).safeTransfer(_to, _amount);
         }
     }
 
