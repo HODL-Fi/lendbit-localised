@@ -75,6 +75,7 @@ library LibProtocol {
     ) internal returns (uint256) {
         uint256 _positionId = _positionIdCheck(s);
         if (!s.s_supportedToken[_token]) revert TOKEN_NOT_SUPPORTED(_token);
+        if (!s._validateVaultUtlization(_token, _principal)) revert TOKEN_OVERUTILIZATION();
 
         (, uint256 _currentBorrowValue) = s._getTokenValueInUSD(_token, _principal);
         uint256 _healthFactor = _getHealthFactor(s, _positionId, _currentBorrowValue);
