@@ -39,11 +39,27 @@ library LibPriceOracle {
         address _pricefeed = s.s_tokenPriceFeed[_token];
         if (_pricefeed == address(0)) revert TOKEN_NOT_SUPPORTED(_token);
 
-        (uint80 _roundId, int256 _answer,,, uint80 _answeredInRound) =
+        (uint80 _roundId, int256 _answer,, uint256 _updatedAt, uint80 _answeredInRound) =
             AggregatorV3Interface(_pricefeed).latestRoundData();
 
-        bool _isStale = (_roundId != _answeredInRound);
-        return (_isStale, uint256(_answer));
+        if (_answer <= 0) revert INVALID_PRICE_FEED(_pricefeed);
+
+        if (_roundId != _answeredInRound) revert STALE_PRICE_FEED(_pricefeed);
+
+        uint32 _threshold = s.s_priceFeedStalenessThreshold[_token];
+        if (_threshold == 0) _threshold = Constants.DEFAULT_STALENESS_THRESHOLD;
+        if (block.timestamp - _updatedAt > _threshold) revert STALE_PRICE_FEED(_pricefeed);
+
+        return (false, uint256(_answer));
+    }
+
+    /// @notice Sets a custom staleness threshold for a specific token's price feed.
+    /// @dev Pass 0 to revert to the protocol-wide DEFAULT_STALENESS_THRESHOLD.
+    ///      Typical values: 3600 (1 h) for high-frequency feeds, 86400 (24 h) for low-frequency feeds.
+    function _setPriceFeedStalenessThreshold(LibAppStorage.StorageLayout storage s, address _token, uint32 _threshold)
+        internal
+    {
+        s.s_priceFeedStalenessThreshold[_token] = _threshold;
     }
 
     function _getPriceDecimals(LibAppStorage.StorageLayout storage s, address _token) internal view returns (uint8) {

@@ -21,6 +21,12 @@ contract PriceOracleFacet {
         return s._getTokenValueInUSD(_token, _amount);
     }
 
+    function setPriceFeedStalenessThreshold(address _token, uint32 _threshold) external {
+        LibDiamond.enforceIsContractOwner();
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        s._setPriceFeedStalenessThreshold(_token, _threshold);
+    }
+
     function initializePriceOracle(
         bytes32 _donID,
         address _router,

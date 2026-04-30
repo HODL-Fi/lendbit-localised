@@ -18,4 +18,7 @@ library Constants {
     uint256 constant BASIS_POINTS_SCALE_256 = 1e4; // 100% = 10000 basis points
     uint32 constant MAX_APR_BASIS_POINTS = 1e6; // Maximum 10000% APR
     uint256 constant ZERO = 0;
+
+    // Chainlink price feed staleness — used as fallback when no per-feed threshold is set
+    uint32 constant DEFAULT_STALENESS_THRESHOLD = 3600; // 1 hour
 }

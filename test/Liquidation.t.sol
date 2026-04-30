@@ -47,6 +47,7 @@ contract LiquidationTest is Base {
         protocolF.borrow(address(token4), _borrowAmount);
         vm.stopPrank();
         vm.warp(block.timestamp + 365 days);
+        updatePricefeedsData(); // to update lastupdated timestamp
 
         uint256 _debt = gettersF.getBorrowDetails(_positionId, address(token4));
 
@@ -90,6 +91,7 @@ contract LiquidationTest is Base {
         protocolF.borrow(address(token4), _borrowAmount);
         vm.stopPrank();
         vm.warp(block.timestamp + 365 days);
+        updatePricefeedsData();
 
         // Make position liquidatable
         MockV3Aggregator(pricefeed1).updateAnswer(1300e8);
@@ -251,6 +253,7 @@ contract LiquidationTest is Base {
         uint256 _loanId = protocolF.takeLoan(address(token4), _borrowAmount, 365 days); // $5000
         vm.stopPrank();
         vm.warp(block.timestamp + 365 days);
+        updatePricefeedsData();
 
         uint256 _debt = gettersF.getOutstandingDebtForLoan(_loanId); // 24e6 token4 @ $250 -> $6000
 
@@ -299,6 +302,7 @@ contract LiquidationTest is Base {
         uint256 _loanId = protocolF.takeLoan(address(token4), _borrowAmount, 365 days); // $5000
         vm.stopPrank();
         vm.warp(block.timestamp + 365 days);
+        updatePricefeedsData();
 
         uint256 _debt = gettersF.getOutstandingDebtForLoan(_loanId); // 24e6 token4 @ $250 -> $6000
 
@@ -349,6 +353,7 @@ contract LiquidationTest is Base {
         uint256 _loanId = protocolF.takeLoan(address(token4), _borrowAmount, 365 days);
         vm.stopPrank();
         vm.warp(block.timestamp + 365 days);
+        updatePricefeedsData();
 
         uint256 _debt = gettersF.getOutstandingDebtForLoan(_loanId); // 12 tokens = 12 * 250 = $3000
 
@@ -521,6 +526,7 @@ contract LiquidationTest is Base {
 
         // --- Fast-forward so position becomes liquidatable ---
         vm.warp(block.timestamp + 365 days);
+        updatePricefeedsData();
         MockV3Aggregator(pricefeed3).updateAnswer(0.9e8);
 
         // Verify position is liquidatable

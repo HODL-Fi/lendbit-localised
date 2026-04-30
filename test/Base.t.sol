@@ -241,6 +241,13 @@ contract Base is Test, IDiamondCut {
         positionManagerF.whitelistAddress(nonAdmin);
     }
 
+    function updatePricefeedsData() internal {
+        MockV3Aggregator(pricefeed1).updateAnswer(1500 * 1e8);
+        MockV3Aggregator(pricefeed2).updateAnswer(300 * 1e8);
+        MockV3Aggregator(pricefeed3).updateAnswer(1 * 1e8);
+        MockV3Aggregator(pricefeed4).updateAnswer(250 * 1e8);
+    }
+
     function mkaddr(string memory name) public returns (address) {
         address addr = address(uint160(uint256(keccak256(abi.encodePacked(name)))));
         vm.label(addr, name);
