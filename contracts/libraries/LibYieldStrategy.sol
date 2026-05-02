@@ -25,7 +25,9 @@ library LibYieldStrategy {
         uint16 _allocationBps,
         uint16 _protocolShareBps
     ) internal {
-        if (_token == address(0) || _pool == address(0) || _aToken == address(0)) revert ADDRESS_ZERO();
+        if (_token == address(0) || _pool == address(0) || _aToken == address(0)) {
+            revert ADDRESS_ZERO();
+        }
         if (_token == Constants.NATIVE_TOKEN) revert TOKEN_NOT_SUPPORTED(_token);
         if (_allocationBps > Constants.BASIS_POINTS_SCALE) revert YIELD_ALLOCATION_TOO_HIGH(_allocationBps);
         if (_protocolShareBps > Constants.BASIS_POINTS_SCALE) revert YIELD_ALLOCATION_TOO_HIGH(_protocolShareBps);
@@ -66,7 +68,7 @@ library LibYieldStrategy {
 
         if (_target > _position.principal) {
             uint256 _toAllocate = _target - _position.principal;
-            _supply(_token, _config, s, _toAllocate);
+            _supply(_token, _config, _toAllocate);
             _position.principal += _toAllocate;
             _config.totalPrincipal += _toAllocate;
 
@@ -146,9 +148,7 @@ library LibYieldStrategy {
             return s.s_positionYield[_positionId][_token].userAccrued;
         }
 
-        uint256 _currentBalance = _config.aToken == address(0)
-            ? 0
-            : IERC20(_config.aToken).balanceOf(address(this));
+        uint256 _currentBalance = _config.aToken == address(0) ? 0 : IERC20(_config.aToken).balanceOf(address(this));
         uint256 _accrued = 0;
         if (_currentBalance > _config.lastRecordedBalance) {
             uint256 _protocolShare = ((_currentBalance - _config.lastRecordedBalance) * _config.protocolShareBps)
@@ -208,19 +208,10 @@ library LibYieldStrategy {
         _position.entryAccYieldPerPrincipalRay = _config.accYieldPerPrincipalRay;
     }
 
-    function _supply(
-        address _token,
-        YieldStrategyConfig storage _config,
-        LibAppStorage.StorageLayout storage s,
-        uint256 _amount
-    ) private {
+    function _supply(address _token, YieldStrategyConfig storage _config, uint256 _amount) private {
         if (_amount == 0) return;
 
-        if (!s.s_yieldApprovals[_token]) {
-            IERC20(_token).approve(_config.aavePool, type(uint256).max);
-            s.s_yieldApprovals[_token] = true;
-        }
-
+        IERC20(_token).approve(_config.aavePool, _amount);
         IAavePool(_config.aavePool).supply(_token, _amount, address(this), 0);
         _refreshRecordedBalance(_config);
     }
