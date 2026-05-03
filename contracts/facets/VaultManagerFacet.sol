@@ -7,16 +7,17 @@ import {LibVaultManager} from "../libraries/LibVaultManager.sol";
 
 import {VaultConfiguration} from "../models/Protocol.sol";
 import "../models/Error.sol";
+import {SecurityBase} from "../libraries/SecurityBase.sol";
 
-contract VaultManagerFacet {
+contract VaultManagerFacet is SecurityBase {
     using LibVaultManager for LibAppStorage.StorageLayout;
 
-    function deposit(address _token, uint256 _amount) external returns (uint256) {
+    function deposit(address _token, uint256 _amount) external nonReentrant returns (uint256) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return s._deposit(msg.sender, _token, _amount);
     }
 
-    function withdraw(address _token, uint256 _amount) external {
+    function withdraw(address _token, uint256 _amount) external nonReentrant {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         s._withdraw(msg.sender, _token, _amount);
     }
@@ -27,13 +28,14 @@ contract VaultManagerFacet {
         string calldata _name,
         string calldata _symbol,
         VaultConfiguration calldata _config
-    ) external onlySecurityCouncil returns (address) {
+    ) external nonReentrant onlySecurityCouncil returns (address) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return s._deployVault(_token, _pricefeed, _name, _symbol, _config);
     }
 
     function upgradeVault(address _token, VaultConfiguration memory _config)
         external
+        nonReentrant
         onlySecurityCouncil
         returns (address)
     {
@@ -87,14 +89,5 @@ contract VaultManagerFacet {
         // VaultConfiguration memory _config = s.s_tokenVaultConfig[_token];
         // return (_config.totalDeposits, _config.totalBorrows);
         return s._getTokenVaultDetails(_token);
-    }
-
-    modifier onlySecurityCouncil() {
-        _onlySecurityCouncil();
-        _;
-    }
-
-    function _onlySecurityCouncil() internal view {
-        if (msg.sender != LibDiamond.contractOwner()) revert ONLY_SECURITY_COUNCIL();
     }
 }

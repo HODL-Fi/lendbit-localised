@@ -2,12 +2,11 @@
 pragma solidity ^0.8.30;
 
 import {LibAppStorage} from "../libraries/LibAppStorage.sol";
-import {LibDiamond} from "../libraries/LibDiamond.sol";
 import {LibPositionManager} from "../libraries/LibPositionManager.sol";
 
-import "../models/Error.sol";
+import {SecurityBase} from "../libraries/SecurityBase.sol";
 
-contract PositionManagerFacet {
+contract PositionManagerFacet is SecurityBase {
     using LibPositionManager for LibAppStorage.StorageLayout;
 
     function createPositionFor(address _user) external returns (uint256) {
@@ -59,15 +58,5 @@ contract PositionManagerFacet {
     function getRequestBorrowSigner() external view returns (address) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return s.s_requestBorrowSigner;
-    }
-
-    // Modifiers
-    modifier onlySecurityCouncil() {
-        _onlySecurityCouncil();
-        _;
-    }
-
-    function _onlySecurityCouncil() internal view {
-        if (msg.sender != LibDiamond.contractOwner()) revert ONLY_SECURITY_COUNCIL();
     }
 }

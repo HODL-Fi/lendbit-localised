@@ -67,6 +67,7 @@ library LibAppStorage {
         mapping(uint256 => uint256) s_loanPrincipal;
         mapping(uint256 => uint256) s_loanStartTime;
         mapping(address => uint32) s_priceFeedStalenessThreshold; // token address -> max age in seconds (0 = use default)
+        uint256 s_reentrancyStatus; // 1 = not entered, 2 = entered (0 defaults to 1)
     }
 
     bytes32 internal constant STORAGE_SLOT = keccak256("contracts.storage.LibAppStorage");

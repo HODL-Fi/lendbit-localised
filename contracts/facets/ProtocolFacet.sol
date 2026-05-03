@@ -7,8 +7,9 @@ import {LibProtocol} from "../libraries/LibProtocol.sol";
 
 import "../models/Error.sol";
 import {BorrowRequest} from "../models/Protocol.sol";
+import {SecurityBase} from "../libraries/SecurityBase.sol";
 
-contract ProtocolFacet {
+contract ProtocolFacet is SecurityBase {
     using LibProtocol for LibAppStorage.StorageLayout;
 
     /**
@@ -16,7 +17,7 @@ contract ProtocolFacet {
      * @param _token The collateral token address
      * @param _amount The amount to deposit
      */
-    function depositCollateral(address _token, uint256 _amount) external payable {
+    function depositCollateral(address _token, uint256 _amount) external payable nonReentrant {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         s._depositCollateral(_token, _amount);
     }
@@ -26,37 +27,45 @@ contract ProtocolFacet {
      * @param _token The collateral token address
      * @param _amount The amount to withdraw
      */
-    function withdrawCollateral(address _token, uint256 _amount) external {
+    function withdrawCollateral(address _token, uint256 _amount) external nonReentrant {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         s._withdrawCollateral(_token, _amount);
     }
 
-    function borrow(address _token, uint256 _amount) external returns (uint256) {
+    function borrow(address _token, uint256 _amount) external nonReentrant returns (uint256) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return s._borrow(_token, _amount);
     }
 
-    function repay(address _token, uint256 _amount) external returns (uint256) {
+    function repay(address _token, uint256 _amount) external nonReentrant returns (uint256) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return s._repay(_token, _amount);
     }
 
-    function takeLoan(address _token, uint256 _principal, uint256 _tenureSeconds) external returns (uint256) {
+    function takeLoan(address _token, uint256 _principal, uint256 _tenureSeconds)
+        external
+        nonReentrant
+        returns (uint256)
+    {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return s._takeLoan(_token, _principal, _tenureSeconds);
     }
 
-    function requestBorrow(BorrowRequest calldata params, bytes calldata signature) external returns (uint256) {
+    function requestBorrow(BorrowRequest calldata params, bytes calldata signature)
+        external
+        nonReentrant
+        returns (uint256)
+    {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return s._requestBorrow(params, signature);
     }
 
-    function repayLoanFor(uint256 positionId, uint256 loanId, uint256 _amount) external returns (uint256) {
+    function repayLoanFor(uint256 positionId, uint256 loanId, uint256 _amount) external nonReentrant returns (uint256) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return s._repayLoanFor(positionId, loanId, _amount);
     }
 
-    function repayLoan(uint256 loanId, uint256 _amount) external returns (uint256) {
+    function repayLoan(uint256 loanId, uint256 _amount) external nonReentrant returns (uint256) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         return s._repayLoan(loanId, _amount);
     }
@@ -87,15 +96,5 @@ contract ProtocolFacet {
     function setCollateralTokenLtv(address _token, uint16 _tokenNewLTV) external onlySecurityCouncil {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         s._setCollateralTokenLtv(_token, _tokenNewLTV);
-    }
-
-    // Modifiers
-    modifier onlySecurityCouncil() {
-        _onlySecurityCouncil();
-        _;
-    }
-
-    function _onlySecurityCouncil() internal view {
-        if (msg.sender != LibDiamond.contractOwner()) revert ONLY_SECURITY_COUNCIL();
     }
 }

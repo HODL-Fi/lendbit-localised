@@ -8,8 +8,9 @@ import {LibYieldStrategy} from "../libraries/LibYieldStrategy.sol";
 
 import {YieldStrategyConfig, YieldPosition} from "../models/Yield.sol";
 import "../models/Error.sol";
+import {SecurityBase} from "../libraries/SecurityBase.sol";
 
-contract YieldStrategyFacet {
+contract YieldStrategyFacet is SecurityBase {
     using LibPositionManager for LibAppStorage.StorageLayout;
 
     function configureYieldToken(
@@ -28,14 +29,18 @@ contract YieldStrategyFacet {
         LibYieldStrategy._setYieldPause(LibAppStorage.appStorage(), _token, _paused);
     }
 
-    function rebalanceMyPosition(address _token) external {
+    function rebalanceMyPosition(address _token) external nonReentrant {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         uint256 _positionId = s._getPositionIdForUser(msg.sender);
         if (_positionId == 0) revert NO_POSITION_ID(msg.sender);
         LibYieldStrategy._rebalancePosition(s, _positionId, _token);
     }
 
-    function claimYield(address _token, uint256 _amount, address _recipient) external returns (uint256 claimed) {
+    function claimYield(address _token, uint256 _amount, address _recipient)
+        external
+        nonReentrant
+        returns (uint256 claimed)
+    {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         uint256 _positionId = s._getPositionIdForUser(msg.sender);
         if (_positionId == 0) revert NO_POSITION_ID(msg.sender);
@@ -46,6 +51,7 @@ contract YieldStrategyFacet {
 
     function harvestProtocolYield(address _token, address _recipient, uint256 _amount)
         external
+        nonReentrant
         onlySecurityCouncil
         returns (uint256 harvested)
     {
@@ -75,14 +81,5 @@ contract YieldStrategyFacet {
             return 0;
         }
         return LibYieldStrategy._pendingYield(s, _positionId, _token);
-    }
-
-    modifier onlySecurityCouncil() {
-        _onlySecurityCouncil();
-        _;
-    }
-
-    function _onlySecurityCouncil() internal view {
-        if (msg.sender != LibDiamond.contractOwner()) revert ONLY_SECURITY_COUNCIL();
     }
 }
