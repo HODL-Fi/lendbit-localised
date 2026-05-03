@@ -275,6 +275,21 @@ contract ProtocolTest is Base {
         vm.stopPrank();
     }
 
+    function testDepositCollateralFailsForBlacklistedUser() public {
+        uint256 depositAmount = 1000 * 1e18;
+        token1.mint(user1, depositAmount);
+
+        // Blacklist user1
+        positionManagerF.blacklistAddress(user1);
+
+        vm.startPrank(user1);
+        token1.approve(address(diamond), depositAmount);
+
+        vm.expectRevert(abi.encodeWithSelector(ADDRESS_NOT_WHITELISTED.selector, user1));
+        protocolF.depositCollateral(address(token1), depositAmount);
+        vm.stopPrank();
+    }
+
     function testSetCollateralTokenLTV() public {
         uint16 _newLTV = 5000; // 50%
 

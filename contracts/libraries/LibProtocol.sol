@@ -30,6 +30,7 @@ library LibProtocol {
 
     function _depositCollateral(LibAppStorage.StorageLayout storage s, address _token, uint256 _amount) internal {
         _validateAmount(_token, _amount);
+        _callerWhitelisted(s);
         uint256 _positionId = s._getPositionIdForUser(msg.sender);
 
         if (_positionId == 0) {
