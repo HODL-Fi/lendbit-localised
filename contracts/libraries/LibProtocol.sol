@@ -204,6 +204,7 @@ library LibProtocol {
         internal
         returns (uint256)
     {
+        _callerWhitelisted(s);
         Loan storage _loan = s.s_loans[_loanId];
         if (_loan.positionId != _positionId) revert NOT_LOAN_OWNER(_positionId);
         if (_loan.status != LoanStatus.FULFILLED) revert INACTIVE_LOAN();
@@ -377,6 +378,8 @@ library LibProtocol {
     {
         if (_newInterestRate == 0) revert AMOUNT_ZERO();
         if (_newPenaltyRate == 0) revert AMOUNT_ZERO();
+        if (_newInterestRate > Constants.MAX_APR_BASIS_POINTS) revert BAD_RATE();
+        if (_newPenaltyRate > Constants.MAX_APR_BASIS_POINTS) revert BAD_RATE();
         s.s_interestRate = _newInterestRate;
         s.s_penaltyRate = _newPenaltyRate;
         emit InterestRateUpdated(_newInterestRate, _newPenaltyRate);
