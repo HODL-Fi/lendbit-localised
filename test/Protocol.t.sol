@@ -873,6 +873,43 @@ contract ProtocolTest is Base {
         vm.stopPrank();
     }
 
+    function testRequestBorrowFailsForOverUtilization() public {
+        // Create a vault with 1000 tokens (token4 has 6 decimals)
+        createVaultAndFund(1000 * 1e6);
+        
+        uint256 collateralAmount = 1000 * 1e18; // Sufficient collateral
+        uint256 borrowAmount = 801 * 1e6; // Borrowing > 80% of totalDeposits (which is MAX_UTILIZATION)
+        uint256 tenure = 30 days;
+
+        uint256 positionId = depositCollateralFor(user1, address(token1), collateralAmount);
+
+        uint256 signerPrivateKey = 0xA11CE;
+        address signer = vm.addr(signerPrivateKey);
+        positionManagerF.setRequestBorrowSigner(signer);
+
+        BorrowRequest memory request = BorrowRequest({
+            action: "BORROW_REQUEST",
+            positionId: positionId,
+            token: address(token4),
+            amount: borrowAmount,
+            tenureSeconds: tenure,
+            sourceChainId: block.chainid,
+            targetChainId: block.chainid,
+            nonce: 1,
+            contractAddress: address(protocolF),
+            wallet: user1
+        });
+
+        bytes32 digest = _borrowRequestDigest(request);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        vm.startPrank(user1);
+        vm.expectRevert(abi.encodeWithSelector(TOKEN_OVERUTILIZATION.selector));
+        protocolF.requestBorrow(request, signature);
+        vm.stopPrank();
+    }
+
     // =============================================================
     //                  TAKE TENURED LOAN TESTS
     // =============================================================

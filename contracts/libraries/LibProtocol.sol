@@ -132,6 +132,8 @@ library LibProtocol {
             revert REQUEST_BORROW_CONTRACT_MISMATCH(address(this), _request.contractAddress);
         }
 
+        if (!s._validateVaultUtlization(_request.token, _request.amount)) revert TOKEN_OVERUTILIZATION();
+
         _verifyBorrowSignature(s, _request, _signature);
 
         if (s.s_requestBorrowNonceUsed[_request.contractAddress][_request.nonce]) {
