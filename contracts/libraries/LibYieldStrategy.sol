@@ -222,13 +222,16 @@ library LibYieldStrategy {
         _refreshRecordedBalance(_config);
     }
 
-    function _ensureSufficientIdle(
+    function _rebalanceForWithdrawal(
         LibAppStorage.StorageLayout storage s,
         uint256 _positionId,
         address _token,
-        uint256 _amount
+        uint256 _withdrawAmount
     ) internal {
-        if (_amount == 0) return;
+        if (_withdrawAmount == 0) {
+            _rebalancePosition(s, _positionId, _token);
+            return;
+        }
 
         YieldStrategyConfig storage _config = s.s_yieldConfigs[_token];
         if (!_shouldProcess(_config, _token)) return;
@@ -237,17 +240,53 @@ library LibYieldStrategy {
         YieldPosition storage _position = s.s_positionYield[_positionId][_token];
         _settlePositionYield(_config, _position);
 
+        uint256 _collateral = s.s_positionCollateral[_positionId][_token];
+        uint256 _target = (_collateral * _config.allocationBps) / Constants.BASIS_POINTS_SCALE;
+
+        uint256 _targetWithdraw = 0;
+        if (_position.principal > _target) {
+            _targetWithdraw = _position.principal - _target;
+        }
+
         uint256 _balance = IERC20(_token).balanceOf(address(this));
-        if (_balance >= _amount) return;
+        uint256 _deficitWithdraw = 0;
+        if (_balance < _withdrawAmount) {
+            _deficitWithdraw = _withdrawAmount - _balance;
+        }
 
-        uint256 _deficit = _amount - _balance;
-        if (_deficit > _position.principal) revert YIELD_LIQUIDITY_DEFICIT(_token, _deficit);
+        uint256 _toWithdraw = _targetWithdraw > _deficitWithdraw ? _targetWithdraw : _deficitWithdraw;
 
-        _withdraw(_token, _config, _deficit);
-        _position.principal -= _deficit;
-        _config.totalPrincipal -= _deficit;
+        if (_toWithdraw > 0) {
+            if (_toWithdraw > _position.principal) revert YIELD_LIQUIDITY_DEFICIT(_token, _toWithdraw);
 
-        emit YieldReleased(_positionId, _token, _deficit);
+            _withdraw(_token, _config, _toWithdraw);
+            _position.principal -= _toWithdraw;
+            _config.totalPrincipal -= _toWithdraw;
+
+            emit YieldReleased(_positionId, _token, _toWithdraw);
+        }
+
+        if (_target > _position.principal) {
+            uint256 _toAllocate = _target - _position.principal;
+            uint256 _newBalance = _toWithdraw > 0 ? _balance + _toWithdraw : _balance;
+            
+            uint256 _availableToSupply = 0;
+            if (_newBalance > _withdrawAmount) {
+                _availableToSupply = _newBalance - _withdrawAmount;
+            }
+            
+            if (_toAllocate > _availableToSupply) {
+                _toAllocate = _availableToSupply;
+            }
+
+            if (_toAllocate > 0) {
+                _supply(_token, _config, _toAllocate);
+                _position.principal += _toAllocate;
+                _config.totalPrincipal += _toAllocate;
+
+                emit YieldAllocated(_positionId, _token, _toAllocate);
+            }
+        }
     }
 
     function _refreshRecordedBalance(YieldStrategyConfig storage _config) private {

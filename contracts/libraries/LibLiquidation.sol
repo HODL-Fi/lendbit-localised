@@ -52,8 +52,7 @@ library LibLiquidation {
         }
 
         s.s_positionCollateral[_loan.positionId][_collateralToken] -= _amountToLiquidate;
-        LibYieldStrategy._rebalancePosition(s, _loan.positionId, _collateralToken);
-        LibYieldStrategy._ensureSufficientIdle(s, _loan.positionId, _collateralToken, _amountToLiquidate);
+        LibYieldStrategy._rebalanceForWithdrawal(s, _loan.positionId, _collateralToken, _amountToLiquidate);
 
         // update outstanding loan here
         _loan.repaid += _amount;
@@ -97,8 +96,7 @@ library LibLiquidation {
         }
 
         s.s_positionCollateral[_positionId][_collateralToken] -= _amountToLiquidate;
-        LibYieldStrategy._rebalancePosition(s, _positionId, _collateralToken);
-        LibYieldStrategy._ensureSufficientIdle(s, _positionId, _collateralToken, _amountToLiquidate);
+        LibYieldStrategy._rebalanceForWithdrawal(s, _positionId, _collateralToken, _amountToLiquidate);
 
         RepayStateChangeParams memory _params =
             RepayStateChangeParams({positionId: _positionId, token: _token, amount: _amount});

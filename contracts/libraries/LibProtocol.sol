@@ -61,8 +61,7 @@ library LibProtocol {
             if (_healthFactor < Constants.MIN_HEALTH_FACTOR) revert HEALTH_FACTOR_TOO_LOW(_healthFactor);
         }
 
-        LibYieldStrategy._rebalancePosition(s, _positionId, _token);
-        LibYieldStrategy._ensureSufficientIdle(s, _positionId, _token, _amount);
+        LibYieldStrategy._rebalanceForWithdrawal(s, _positionId, _token, _amount);
 
         _transferToken(_token, msg.sender, _amount);
         emit CollateralWithdrawn(_positionId, _token, _amount);
