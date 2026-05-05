@@ -233,7 +233,9 @@ library LibProtocol {
         TokenVault _vault = s.i_tokenVault[_loan.token];
         IERC20(_loan.token).safeTransferFrom(msg.sender, address(_vault), _amount);
 
-        s._updateVaultRepays(_loan.token, _amount);
+        uint256 _principalRepaid = _amount > _loan.principal ? _loan.principal : _amount;
+        s._updateVaultRepays(_loan.token, _principalRepaid);
+
         _vault.repay(_amount);
 
         emit LoanRepayment(_positionId, _loanId, _loan.token, _amount);
@@ -270,7 +272,8 @@ library LibProtocol {
 
         s.s_positionBorrowedLastUpdate[_positionId][_token] = block.timestamp;
 
-        s._updateVaultBorrows(_token, _amount);
+        uint256 capitalizedInterest = _calculateUserDebt(s, _positionId, _token, 0) - _tokenBorrow;
+        s._updateVaultBorrows(_token, _amount + capitalizedInterest);
 
         TokenVault _vault = s.i_tokenVault[_token];
         _vault.borrow(msg.sender, _amount);
@@ -294,7 +297,6 @@ library LibProtocol {
         RepayStateChangeParams memory _params =
             RepayStateChangeParams({positionId: _positionId, token: _token, amount: _amount});
         _repayStateChanges(s, _params);
-        s._updateVaultRepays(address(_token), _amount);
         TokenVault _vault = s.i_tokenVault[_token];
         _vault.repay(_amount);
 
