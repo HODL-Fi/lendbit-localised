@@ -3,6 +3,7 @@ pragma solidity ^0.8.30;
 
 import {ERC20Mock} from "@chainlink/contracts/src/v0.8/shared/mocks/ERC20Mock.sol";
 
+import {Vm} from "forge-std/Vm.sol";
 import {MockAavePool} from "../contracts/mocks/MockAavePool.sol";
 import {YieldPosition} from "../contracts/models/Yield.sol";
 import {Base} from "./Base.t.sol";
@@ -198,4 +199,119 @@ contract YieldStrategyTest is Base {
         assertEq(pos2.principal, (amount * ALLOCATION_BPS) / 10000);
         // User1 had to redeem from Aave, user2 was unaffected
     }
+
+    function testDoubleWithdrawalOnCollateralWithdraw() public {
+        uint256 deposit = 2000 ether;
+        mintTokenTo(address(token1), user1, deposit);
+        vm.startPrank(user1);
+        token1.approve(address(diamond), deposit);
+        protocolF.depositCollateral(address(token1), deposit);
+        // Diamond holds 1200 idle, Aave holds 800 (40%)
+
+        // Reduce Diamond's idle balance by sending 600 ether to another address
+        // so that the idle balance becomes 600 ether (instead of 1200)
+        vm.stopPrank();
+        vm.prank(address(diamond));
+        token1.transfer(address(1), 600 ether);
+
+        // Withdraw 1200 tokens:
+        // 1. New collateral = 2000 - 1200 = 800, target principal = 800 * 40% = 320.
+        //    Current principal = 800. Target withdrawal = 800 - 320 = 480.
+        // 2. Idle balance is 600. Withdraw amount is 1200. Deficit withdrawal = 1200 - 600 = 600.
+        // Under the old code, both _rebalancePosition (withdrawing 480) and _ensureSufficientIdle (withdrawing 120) would trigger Aave withdrawals.
+        // In the fixed code, a single withdrawal of max(480, 600) = 600 is triggered.
+        vm.startPrank(user1);
+        vm.recordLogs();
+        protocolF.withdrawCollateral(address(token1), 1200 ether);
+        vm.stopPrank();
+
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        uint256 yieldReleasedCount = 0;
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (entries[i].topics[0] == keccak256("YieldReleased(uint256,address,uint256)")) {
+                yieldReleasedCount++;
+            }
+        }
+
+        // Assert that only a single Aave withdrawal (YieldReleased event) is triggered.
+        assertEq(yieldReleasedCount, 1, "Should only perform a single Aave withdrawal");
+    }
+
+    /// @notice Tests the math invariants around yield accrual and claiming.
+    /// Invariant 1: Claiming yield does not reduce the Aave balance below totalPrincipal.
+    /// Invariant 2: Yield continues to accrue correctly on the remaining Aave balance, 
+    /// dividing by totalPrincipal safely without creating insolvency.
+    /// Invariant 3: The protocol remains fully solvent (users can withdraw all collateral 
+    /// and the protocol can harvest its yield) even after asynchronous yield claims.
+    function testYieldClaimMaintainsInvariants() public {
+        uint256 depositAmount = 10_000 ether;
+        
+        // 1. Two users deposit equal amounts
+        mintTokenTo(address(token1), user1, depositAmount);
+        vm.startPrank(user1);
+        token1.approve(address(diamond), depositAmount);
+        protocolF.depositCollateral(address(token1), depositAmount);
+        vm.stopPrank();
+
+        mintTokenTo(address(token1), user2, depositAmount);
+        vm.startPrank(user2);
+        token1.approve(address(diamond), depositAmount);
+        protocolF.depositCollateral(address(token1), depositAmount);
+        vm.stopPrank();
+
+        // Total principal in Aave is 40% of 20_000 = 8_000 ether.
+        uint256 expectedTotalPrincipal = (20_000 ether * uint256(ALLOCATION_BPS)) / 10_000;
+        
+        // 2. Simulate yield generation
+        uint256 simulatedYield = 1_000 ether;
+        mockPool.simulateYield(address(diamond), simulatedYield);
+
+        // 3. User1 claims their yield
+        vm.startPrank(user1);
+        yieldStrategyF.claimYield(address(token1), 0, user1);
+        vm.stopPrank();
+
+        // 4. Invariant 1: Aave balance >= totalPrincipal
+        ERC20Mock aToken = mockPool.aToken();
+        uint256 aTokenBalance = aToken.balanceOf(address(diamond));
+        assertGe(aTokenBalance, expectedTotalPrincipal, "Invariant 1: Aave balance >= totalPrincipal");
+
+        // 5. Simulate more yield generation on the smaller base
+        uint256 simulatedYield2 = 500 ether;
+        mockPool.simulateYield(address(diamond), simulatedYield2);
+
+        // 6. User2 claims their yield (includes their share of first and second yield)
+        vm.startPrank(user2);
+        yieldStrategyF.claimYield(address(token1), 0, user2);
+        vm.stopPrank();
+
+        // 7. Verify Invariant 2 & 3: Protocol is solvent
+        // Both users withdraw all their collateral
+        vm.startPrank(user1);
+        protocolF.withdrawCollateral(address(token1), depositAmount);
+        vm.stopPrank();
+
+        vm.startPrank(user2);
+        protocolF.withdrawCollateral(address(token1), depositAmount);
+        vm.stopPrank();
+
+        // User1 claims remaining yield that accrued before their withdrawal
+        vm.startPrank(user1);
+        yieldStrategyF.claimYield(address(token1), 0, user1);
+        vm.stopPrank();
+
+        // 8. Protocol harvests its yield
+        uint256 balanceBefore = token1.balanceOf(address(this));
+        yieldStrategyF.harvestProtocolYield(address(token1), address(this), 0);
+        uint256 balanceAfter = token1.balanceOf(address(this));
+
+        // The protocol's share should be exactly PROTOCOL_SHARE_BPS of total simulated yield
+        uint256 expectedProtocolShare = ((simulatedYield + simulatedYield2) * PROTOCOL_SHARE_BPS) / 10_000;
+        assertEq(balanceAfter - balanceBefore, expectedProtocolShare, "Invariant 3: Protocol harvested correct share");
+
+        // After everything is withdrawn and harvested, the aToken balance should be 0 
+        uint256 finalATokenBalance = aToken.balanceOf(address(diamond));
+        assertEq(finalATokenBalance, 0, "Invariant 3: Fully solvent, Aave pool drained cleanly");
+    }
 }
+
