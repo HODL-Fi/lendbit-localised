@@ -53,6 +53,8 @@ error YIELD_NOT_ENABLED(address token);
 error YIELD_TOKEN_PAUSED(address token);
 error YIELD_NOTHING_TO_CLAIM(uint256 positionId, address token);
 error YIELD_LIQUIDITY_DEFICIT(address token, uint256 deficit);
+error BAD_POOL_ADDRESS(address pool);
+error POOL_TOKEN_MISMATCH(address pool, address token);
 
 // chainlink functions error
 error OnlyRouterCanFulfill();

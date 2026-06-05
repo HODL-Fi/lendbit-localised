@@ -891,7 +891,7 @@ contract ProtocolTest is Base {
     function testRequestBorrowFailsForOverUtilization() public {
         // Create a vault with 1000 tokens (token4 has 6 decimals)
         createVaultAndFund(1000 * 1e6);
-        
+
         uint256 collateralAmount = 1000 * 1e18; // Sufficient collateral
         uint256 borrowAmount = 801 * 1e6; // Borrowing > 80% of totalDeposits (which is MAX_UTILIZATION)
         uint256 tenure = 30 days;
@@ -978,21 +978,33 @@ contract ProtocolTest is Base {
     function testTakeLoanFailsForOverUtilization() public {
         // Vault is funded with 1000 tokens (token4 has 6 decimals)
         createVaultAndFund(1000 * 1e6);
-        
+
         // Setup sufficient collateral: 1000 token1 ($1.5M)
-        uint256 _collateralAmount = 1000 * 1e18; 
+        uint256 _collateralAmount = 1000 * 1e18;
         token1.mint(user1, _collateralAmount);
 
         vm.startPrank(user1);
         token1.approve(address(diamond), _collateralAmount);
         protocolF.depositCollateral(address(token1), _collateralAmount);
-        
+
         // Attempt to borrow more than 80% (Constants.MAX_UTILIZATION) of total deposits
         uint256 _borrowAmount = 801 * 1e6;
-        
+
         vm.expectRevert(abi.encodeWithSelector(TOKEN_OVERUTILIZATION.selector));
         protocolF.takeLoan(address(token4), _borrowAmount, 30 days);
         vm.stopPrank();
+    }
+
+    function testTakeLoanTenureTooShort() public {
+        createVaultAndFund(1000 * 1e6);
+
+        uint256 collateralAmount = 2000 ether;
+        depositCollateralFor(address(this), address(token1), collateralAmount);
+        uint256 principal = 1000 ether;
+        uint256 shortTenure = 1 days - 1; // less than minimum
+
+        vm.expectRevert(TENURE_TOO_SHORT.selector);
+        protocolF.takeLoan(address(token4), principal, shortTenure);
     }
 
     function testRepayLoanForSuccess() public {

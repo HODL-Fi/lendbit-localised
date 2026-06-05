@@ -37,4 +37,11 @@ contract MockAavePool {
         aToken.mint(_recipient, _amount);
         ERC20Mock(address(asset)).mint(address(this), _amount);
     }
+
+    function getReserveAToken(address _token) external view returns (address) {
+        if (_token == address(asset)) {
+            return address(aToken);
+        }
+        return address(0);
+    }
 }

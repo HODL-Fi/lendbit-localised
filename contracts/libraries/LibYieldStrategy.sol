@@ -10,6 +10,7 @@ import "../models/Error.sol";
 import "../models/Event.sol";
 
 interface IAavePool {
+    function getReserveAToken(address asset) external view returns (address);
     function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
     function withdraw(address asset, uint256 amount, address to) external returns (uint256 withdrawn);
 }
@@ -31,6 +32,12 @@ library LibYieldStrategy {
         if (_token == Constants.NATIVE_TOKEN) revert TOKEN_NOT_SUPPORTED(_token);
         if (_allocationBps > Constants.BASIS_POINTS_SCALE) revert YIELD_ALLOCATION_TOO_HIGH(_allocationBps);
         if (_protocolShareBps > Constants.BASIS_POINTS_SCALE) revert YIELD_ALLOCATION_TOO_HIGH(_protocolShareBps);
+
+        try IAavePool(_pool).getReserveAToken(_token) returns (address aToken) {
+            if (aToken != _aToken) revert POOL_TOKEN_MISMATCH(_pool, _aToken);
+        } catch {
+            revert BAD_POOL_ADDRESS(_pool);
+        }
 
         YieldStrategyConfig storage _config = s.s_yieldConfigs[_token];
         _config.enabled = true;
@@ -122,6 +129,7 @@ library LibYieldStrategy {
     ) internal returns (uint256 harvested) {
         YieldStrategyConfig storage _config = s.s_yieldConfigs[_token];
         if (!_config.enabled) revert YIELD_NOT_ENABLED(_token);
+        if (_config.paused) revert YIELD_TOKEN_PAUSED(_token);
 
         _accrueYield(s, _token);
 

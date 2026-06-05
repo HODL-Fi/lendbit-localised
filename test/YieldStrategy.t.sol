@@ -5,6 +5,7 @@ import {ERC20Mock} from "@chainlink/contracts/src/v0.8/shared/mocks/ERC20Mock.so
 
 import {Vm} from "forge-std/Vm.sol";
 import {MockAavePool} from "../contracts/mocks/MockAavePool.sol";
+import {MockMismatchPool, MockRevertingPool} from "../contracts/mocks/MockMismatchPool.sol";
 import {YieldPosition} from "../contracts/models/Yield.sol";
 import {Base} from "./Base.t.sol";
 
@@ -312,6 +313,61 @@ contract YieldStrategyTest is Base {
         // After everything is withdrawn and harvested, the aToken balance should be 0 
         uint256 finalATokenBalance = aToken.balanceOf(address(diamond));
         assertEq(finalATokenBalance, 0, "Invariant 3: Fully solvent, Aave pool drained cleanly");
+    }
+
+    // ─── Failure-path tests for _configureYieldToken (L36-L40) ───────────────
+
+    /// @notice Pool is a valid contract but getReserveAToken returns a different
+    ///         address from the one supplied → POOL_TOKEN_MISMATCH must revert.
+    function testConfigureRevertsOnPoolTokenMismatch() public {
+        // Deploy a fresh token so there's no existing config to interfere with.
+        ERC20Mock freshToken = new ERC20Mock(18);
+
+        // The caller claims the aToken is `address(mockPool.aToken())`,
+        // but MockMismatchPool always returns `address(1)` instead.
+        MockMismatchPool mismatchPool = new MockMismatchPool(address(1));
+
+        // The address we tell the library is the correct aToken (anything ≠ what the pool returns).
+        address claimedAToken = address(mockPool.aToken());
+
+        vm.expectRevert(
+            abi.encodeWithSignature("POOL_TOKEN_MISMATCH(address,address)", address(mismatchPool), claimedAToken)
+        );
+        yieldStrategyF.configureYieldToken(
+            address(freshToken),
+            address(mismatchPool), // pool returns address(1), not claimedAToken
+            claimedAToken,
+            ALLOCATION_BPS,
+            PROTOCOL_SHARE_BPS
+        );
+    }
+
+    /// @notice Pool is a contract but getReserveAToken reverts internally, so the
+    ///         `catch` block in _configureYieldToken fires and throws BAD_POOL_ADDRESS.
+    ///
+    ///         NOTE: An EOA cannot be used here. Calling an EOA returns 0 bytes,
+    ///         which causes an ABI-decoding panic (0 bytes → can't decode `address`)
+    ///         that Solidity's try/catch does NOT intercept, leaking the raw panic
+    ///         instead of the custom BAD_POOL_ADDRESS error.
+    function testConfigureRevertsOnBadPoolAddress() public {
+        ERC20Mock freshToken = new ERC20Mock(18);
+
+        // Deploy a contract that always reverts in getReserveAToken.
+        // The try/catch in LibYieldStrategy will catch the revert and
+        // re-throw it as BAD_POOL_ADDRESS.
+        MockRevertingPool revertingPool = new MockRevertingPool();
+        address anyAToken = address(mockPool.aToken());
+
+        vm.expectRevert(
+            abi.encodeWithSignature("BAD_POOL_ADDRESS(address)", address(revertingPool))
+        );
+        yieldStrategyF.configureYieldToken(
+            address(freshToken),
+            address(revertingPool),
+            anyAToken,
+            ALLOCATION_BPS,
+            PROTOCOL_SHARE_BPS
+        );
     }
 }
 
