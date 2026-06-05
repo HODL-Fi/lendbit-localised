@@ -33,6 +33,7 @@ error NO_ACTIVE_BORROW_FOR_TOKEN(uint256 positionId, address token);
 error NO_COLLATERAL_FOR_TOKEN(uint256 positionId, address token);
 error NOT_LOAN_OWNER(uint256 positionId);
 error ADDRESS_NOT_WHITELISTED(address caller);
+error TENURE_TOO_SHORT();
 
 error LTV_BELOW_TEN_PERCENT();
 error TOKEN_OVERUTILIZATION();

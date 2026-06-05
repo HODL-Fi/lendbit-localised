@@ -75,6 +75,7 @@ library LibProtocol {
     ) internal returns (uint256) {
         uint256 _positionId = _positionIdCheck(s);
         if (!s.s_supportedToken[_token]) revert TOKEN_NOT_SUPPORTED(_token);
+        if (_tenureSeconds < Constants.ONE_DAY) revert TENURE_TOO_SHORT();
         if (!s._validateVaultUtlization(_token, _principal)) revert TOKEN_OVERUTILIZATION();
 
         (, uint256 _currentBorrowValue) = s._getTokenValueInUSD(_token, _principal);

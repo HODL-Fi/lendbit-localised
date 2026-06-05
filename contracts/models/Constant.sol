@@ -22,4 +22,5 @@ library Constants {
     // Chainlink price feed staleness — used as fallback when no per-feed threshold is set
     uint32 constant DEFAULT_STALENESS_THRESHOLD = 3600; // 1 hour
     uint256 constant ONE_YEAR = 365 days;
+    uint256 constant ONE_DAY = 24 * 60 * 60;
 }
