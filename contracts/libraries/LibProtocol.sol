@@ -553,14 +553,14 @@ library LibProtocol {
             _timeElapsed = _loan.tenureSeconds;
         }
 
-        uint256 _interest =
-            (_loan.principal * _loan.annualRateBps * _timeElapsed) / (Constants.BASIS_POINTS_SCALE_256 * 365 days);
+        uint256 _interest = (_loan.principal * _loan.annualRateBps * _timeElapsed)
+            / (Constants.BASIS_POINTS_SCALE_256 * Constants.ONE_YEAR);
         uint256 _totalOwed = _loan.principal + _interest;
 
         if (_timestamp > (_loan.startTimestamp + _loan.tenureSeconds)) {
             uint256 penaltyTime = _timestamp - (_loan.startTimestamp + _loan.tenureSeconds);
-            uint256 penalty = (_loan.principal * (_loan.annualRateBps + _loan.penaltyRateBps) * penaltyTime)
-                / (Constants.BASIS_POINTS_SCALE_256 * 365 days);
+            uint256 penalty = (_totalOwed * (_loan.annualRateBps + _loan.penaltyRateBps) * penaltyTime)
+                / (Constants.BASIS_POINTS_SCALE_256 * Constants.ONE_YEAR);
             _totalOwed += penalty;
         }
 

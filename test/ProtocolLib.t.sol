@@ -64,7 +64,7 @@ contract ProtocolLibTest is Base {
 
         uint256 outstanding = LibProtocol._outstandingBalance(_loan, block.timestamp + (2 * 365 days));
 
-        // Expected outstanding balance: 2000 + 20% interest p.a + 5% penalty p.a after penalty = 2900 ether
-        assertEq(outstanding, 2900 ether);
+        // Expected outstanding balance: 2000 + 20% interest after first year + 25% interest p.a after penalty = 3000 ether
+        assertEq(outstanding, 3000 ether);
     }
 }

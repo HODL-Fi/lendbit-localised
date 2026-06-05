@@ -269,12 +269,12 @@ library LibYieldStrategy {
         if (_target > _position.principal) {
             uint256 _toAllocate = _target - _position.principal;
             uint256 _newBalance = _toWithdraw > 0 ? _balance + _toWithdraw : _balance;
-            
+
             uint256 _availableToSupply = 0;
             if (_newBalance > _withdrawAmount) {
                 _availableToSupply = _newBalance - _withdrawAmount;
             }
-            
+
             if (_toAllocate > _availableToSupply) {
                 _toAllocate = _availableToSupply;
             }
