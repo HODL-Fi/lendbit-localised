@@ -2,11 +2,9 @@
 pragma solidity ^0.8.30;
 
 import {LibAppStorage} from "../libraries/LibAppStorage.sol";
-import {LibDiamond} from "../libraries/LibDiamond.sol";
 import {LibVaultManager} from "../libraries/LibVaultManager.sol";
 
 import {VaultConfiguration} from "../models/Protocol.sol";
-import "../models/Error.sol";
 import {SecurityBase} from "../libraries/SecurityBase.sol";
 
 contract VaultManagerFacet is SecurityBase {

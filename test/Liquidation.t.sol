@@ -58,7 +58,8 @@ contract LiquidationTest is Base {
 
         uint256 _userCollateralBefore = gettersF.getPositionCollateral(_positionId, address(token1));
         uint256 _t1BalanceBefore = token1.balanceOf(liquidator);
-        uint256 _vaultAssetBefore = gettersF.getVaultTotalAssets(address(token4));
+        uint256 _vaultBalanceBefore = token4.balanceOf(gettersF.getTokenVault(address(token4)));
+        uint256 _vaultTotalAssetBefore = gettersF.getVaultTotalAssets(address(token4));
 
         vm.startPrank(liquidator);
         // Give liquidator enough allowance and balance
@@ -77,7 +78,8 @@ contract LiquidationTest is Base {
 
         assertEq(gettersF.getBorrowDetails(_positionId, address(token4)), 0); // new outstanding debt is zero
         assertEq(_userCollateralBefore, _userCollateralNow + _liquidatorBalance);
-        assertEq(_vaultAssetBefore + _debt, gettersF.getVaultTotalAssets(address(token4)));
+        assertEq(_vaultBalanceBefore + _debt, token4.balanceOf(gettersF.getTokenVault(address(token4))));
+        assertLe(_vaultTotalAssetBefore, gettersF.getVaultTotalAssets(address(token4))); // not stable because vault use fixed rate but pool positions are variable rate
         assertGt(_borrowAmount, token4.balanceOf(liquidator));
         assertLt(_t1BalanceBefore, token1.balanceOf(liquidator));
     }
@@ -100,7 +102,8 @@ contract LiquidationTest is Base {
 
         uint256 _debt = gettersF.getBorrowDetails(_positionId, address(token4));
         uint256 _userCollateralBefore = gettersF.getPositionCollateral(_positionId, address(1));
-        uint256 _vaultAssetBefore = gettersF.getVaultTotalAssets(address(token4));
+        uint256 _vaultBalanceBefore = token4.balanceOf(gettersF.getTokenVault(address(token4)));
+        uint256 _vaultTotalAssetBefore = gettersF.getVaultTotalAssets(address(token4));
         uint256 _t1BalanceBefore = liquidator.balance;
 
         vm.startPrank(liquidator);
@@ -118,7 +121,8 @@ contract LiquidationTest is Base {
         uint256 _userCollateralNow = gettersF.getPositionCollateral(_positionId, address(1));
         assertEq(gettersF.getBorrowDetails(_positionId, address(token4)), 0); // new outstanding debt is zero
         assertEq(_userCollateralBefore, _userCollateralNow + liquidator.balance);
-        assertEq(_vaultAssetBefore + _debt, gettersF.getVaultTotalAssets(address(token4)));
+        assertEq(_vaultBalanceBefore + _debt, token4.balanceOf(gettersF.getTokenVault(address(token4))));
+        assertLe(_vaultTotalAssetBefore, gettersF.getVaultTotalAssets(address(token4))); // not stable because vault use fixed rate but pool positions are variable rate
         vm.assertGt(_borrowAmount, token4.balanceOf(liquidator));
         vm.assertLt(_t1BalanceBefore, liquidator.balance);
         vm.assertGt(_userCollateralBefore, gettersF.getPositionCollateral(_positionId, address(1)));
@@ -263,7 +267,8 @@ contract LiquidationTest is Base {
 
         uint256 _userCollateralBefore = gettersF.getPositionCollateral(_positionId, address(token1));
         uint256 _t1BalanceBefore = token1.balanceOf(liquidator);
-        uint256 _vaultAssetBefore = gettersF.getVaultTotalAssets(address(token4));
+        uint256 _vaultBalanceBefore = token4.balanceOf(gettersF.getTokenVault(address(token4)));
+        uint256 _vaultTotalAssetBefore = gettersF.getVaultTotalAssets(address(token4));
 
         vm.startPrank(liquidator);
         // Give liquidator enough allowance and balance
@@ -288,7 +293,8 @@ contract LiquidationTest is Base {
         assertEq(principal, _borrowAmount);
         assertEq(uint8(LoanStatus.LIQUIDATED), status);
         assertEq(_userCollateralBefore, _userCollateralNow + _liquidatorBalance);
-        assertEq(_vaultAssetBefore + _debt, gettersF.getVaultTotalAssets(address(token4)));
+        assertEq(_vaultBalanceBefore + _debt, token4.balanceOf(gettersF.getTokenVault(address(token4))));
+        assertEq(_vaultTotalAssetBefore, gettersF.getVaultTotalAssets(address(token4))); // should be equal because total assets adds debt loans
         assertGt(_borrowAmount, token4.balanceOf(liquidator));
         assertLt(_t1BalanceBefore, token1.balanceOf(liquidator));
     }
@@ -312,7 +318,8 @@ contract LiquidationTest is Base {
 
         uint256 _userCollateralBefore = gettersF.getPositionCollateral(_positionId, address(token1));
         uint256 _t1BalanceBefore = token1.balanceOf(liquidator);
-        uint256 _vaultAssetBefore = gettersF.getVaultTotalAssets(address(token4));
+        uint256 _vaultBalanceBefore = token4.balanceOf(gettersF.getTokenVault(address(token4)));
+        uint256 _vaultTotalAssetBefore = gettersF.getVaultTotalAssets(address(token4));
 
         uint256 _payback = _debt / 2; // payback half the loan
 
@@ -339,7 +346,8 @@ contract LiquidationTest is Base {
         assertEq(principal, ((_borrowAmount * 120 / 100) - _payback)); // the new principal used to calculate the outstanding debt
         assertEq(uint8(LoanStatus.FULFILLED), status); // loan is still open
         assertEq(_userCollateralBefore, _userCollateralNow + _liquidatorBalance);
-        assertEq(_vaultAssetBefore + _payback, gettersF.getVaultTotalAssets(address(token4)));
+        assertEq(_vaultBalanceBefore + _payback, token4.balanceOf(gettersF.getTokenVault(address(token4))));
+        assertEq(_vaultTotalAssetBefore, gettersF.getVaultTotalAssets(address(token4))); // should be equal because total assets adds debt loans
         assertGt(_borrowAmount, token4.balanceOf(liquidator));
         assertLt(_t1BalanceBefore, token1.balanceOf(liquidator));
     }
@@ -364,7 +372,8 @@ contract LiquidationTest is Base {
 
         uint256 _userCollateralBefore = gettersF.getPositionCollateral(_positionId, address(1));
         uint256 _t1BalanceBefore = liquidator.balance;
-        uint256 _vaultAssetBefore = gettersF.getVaultTotalAssets(address(token4));
+        uint256 _vaultBalanceBefore = token4.balanceOf(gettersF.getTokenVault(address(token4)));
+        uint256 _vaultTotalAssetBefore = gettersF.getVaultTotalAssets(address(token4));
 
         vm.startPrank(liquidator);
         // Give liquidator enough allowance and balance
@@ -389,7 +398,8 @@ contract LiquidationTest is Base {
         assertEq(principal, _borrowAmount);
         assertEq(uint8(LoanStatus.LIQUIDATED), status);
         assertEq(_userCollateralBefore, _userCollateralNow + _liquidatorBalance);
-        assertEq(_vaultAssetBefore + _debt, gettersF.getVaultTotalAssets(address(token4)));
+        assertEq(_vaultBalanceBefore + _debt, token4.balanceOf(gettersF.getTokenVault(address(token4))));
+        assertEq(_vaultTotalAssetBefore, gettersF.getVaultTotalAssets(address(token4))); // should be equal because total assets adds debt loans
         assertGt(_borrowAmount, token4.balanceOf(liquidator));
         assertLt(_t1BalanceBefore, _liquidatorBalance);
     }

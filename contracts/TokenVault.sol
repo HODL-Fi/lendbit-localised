@@ -132,8 +132,8 @@ contract TokenVault is ERC4626, ReentrancyGuard {
     function deposit(uint256 assets, address receiver)
         public
         override
-        onlyDiamond
         nonReentrant
+        onlyDiamond
         notPaused
         addressZeroCheck(receiver)
         validAmount(assets)
@@ -166,8 +166,8 @@ contract TokenVault is ERC4626, ReentrancyGuard {
     function withdraw(uint256 assets, address receiver, address owner)
         public
         override
-        onlyDiamond
         nonReentrant
+        onlyDiamond
         addressZeroCheck(receiver)
         addressZeroCheck(owner)
         validAmount(assets)
@@ -270,7 +270,7 @@ contract TokenVault is ERC4626, ReentrancyGuard {
     }
 
     function setInterestRate(uint16 rate) external onlyDiamond {
-        if (rate > 10000) revert InvalidRate(); // max 100% interest rate
+        if (rate > Constants.BASIS_POINTS_SCALE) revert InvalidRate(); // max 100% interest rate
         _accrueInterest();
         interestRate = rate;
     }
@@ -318,7 +318,8 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         uint256 timeElapsed = block.timestamp - lastUpdateTimestamp;
         if (timeElapsed == 0) return;
 
-        uint256 interest = (totalBorrows * interestRate * timeElapsed) / (Constants.BASIS_POINTS_SCALE_256 * 365 days);
+        uint256 interest =
+            (totalBorrows * interestRate * timeElapsed) / (Constants.BASIS_POINTS_SCALE_256 * Constants.ONE_YEAR);
 
         if (interest > 0) {
             totalAccruedInterest += interest;
@@ -329,7 +330,8 @@ contract TokenVault is ERC4626, ReentrancyGuard {
 
     function _pendingInterest() internal view returns (uint256) {
         uint256 _timeElapsed = block.timestamp - lastUpdateTimestamp;
-        uint256 _interest = (totalBorrows * interestRate * _timeElapsed) / (Constants.BASIS_POINTS_SCALE_256 * 365 days);
+        uint256 _interest =
+            (totalBorrows * interestRate * _timeElapsed) / (Constants.BASIS_POINTS_SCALE_256 * Constants.ONE_YEAR);
         return _interest;
     }
 

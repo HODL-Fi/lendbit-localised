@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {LibAppStorage} from "../libraries/LibAppStorage.sol";
 import {LibPriceOracle} from "../libraries/LibPriceOracle.sol";
@@ -15,10 +16,12 @@ import "../models/Error.sol";
 import "../models/Event.sol";
 import "../models/Protocol.sol";
 import {RepayStateChangeParams} from "../models/FunctionParams.sol";
+import {TokenVault} from "../TokenVault.sol";
 
 library LibLiquidation {
     using LibPriceOracle for LibAppStorage.StorageLayout;
     using LibProtocol for LibAppStorage.StorageLayout;
+    using SafeERC20 for IERC20;
 
     function _isLiquidatable(LibAppStorage.StorageLayout storage s, uint256 _positionId) internal view returns (bool) {
         uint256 _collateral = s._getPositionCollateralValue(_positionId);
@@ -68,9 +71,10 @@ library LibLiquidation {
 
         LibVaultManager._updateVaultRepays(s, _loan.token, _amount);
 
-        ERC20 _tokenI = ERC20(_loan.token);
-        bool _success = _tokenI.transferFrom(msg.sender, address(s.i_tokenVault[_loan.token]), _amount);
-        if (!_success) revert TRANSFER_FAILED();
+        TokenVault _tokenVault = s.i_tokenVault[_loan.token];
+
+        IERC20(_loan.token).safeTransferFrom(msg.sender, address(_tokenVault), _amount);
+        _tokenVault.repay(_amount);
 
         LibProtocol._transferToken(_collateralToken, msg.sender, _amountToLiquidate);
 
@@ -102,9 +106,9 @@ library LibLiquidation {
             RepayStateChangeParams({positionId: _positionId, token: _token, amount: _amount});
         s._repayStateChanges(_params);
 
-        ERC20 _tokenI = ERC20(_token);
-        bool _success = _tokenI.transferFrom(msg.sender, address(s.i_tokenVault[_token]), _amount);
-        if (!_success) revert TRANSFER_FAILED();
+        TokenVault _tokenVault = s.i_tokenVault[_token];
+        IERC20(_token).safeTransferFrom(msg.sender, address(_tokenVault), _amount);
+        _tokenVault.repay(_amount);
 
         LibProtocol._transferToken(_collateralToken, msg.sender, _amountToLiquidate);
 
