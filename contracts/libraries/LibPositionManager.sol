@@ -26,6 +26,7 @@ library LibPositionManager {
         _positionId = _validateUserExists(s, _oldAddress);
         _addressIsWhitelisted(s, _oldAddress);
         _addressIsWhitelisted(s, _newAddress);
+        if (_userAddressExists(s, _newAddress)) revert ADDRESS_EXISTS(_newAddress);
 
         s.s_ownerPosition[_newAddress] = _positionId;
         s.s_positionOwner[_positionId] = _newAddress;

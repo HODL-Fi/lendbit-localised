@@ -81,6 +81,23 @@ contract PositionManagerTest is Base {
         positionManagerF.transferPositionOwnership(_newAddress);
     }
 
+    function testTransferPositionOwnershipFailsWhenNewAddressAlreadyHasPosition() public {
+        address _user = address(0xdead);
+        address _newAddress = address(0xacc);
+
+        // create positions for both addresses
+        uint256 _positionId1 = positionManagerF.createPositionFor(_user);
+        uint256 _positionId2 = positionManagerF.createPositionFor(_newAddress);
+        // ensure they are different
+        assertEq(_positionId1, 1);
+        assertEq(_positionId2, 2);
+
+        vm.startPrank(_user);
+        vm.expectRevert(abi.encodeWithSelector(ADDRESS_EXISTS.selector, _newAddress));
+        positionManagerF.transferPositionOwnership(_newAddress);
+        vm.stopPrank();
+    }
+
     function testAdminForceTransferPosition() public {
         address _user = address(0xdead);
         address _newAddress = address(0xacc);
