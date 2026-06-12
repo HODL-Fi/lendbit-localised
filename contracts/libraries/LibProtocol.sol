@@ -218,6 +218,8 @@ library LibProtocol {
             _amount = _loanDebt;
         }
 
+        uint256 _oldPrincipal = _loan.principal;
+
         // Update loan repaid amount
         _loan.repaid += _amount;
         _loan.principal = _loanDebt - _amount;
@@ -233,7 +235,7 @@ library LibProtocol {
         TokenVault _vault = s.i_tokenVault[_loan.token];
         IERC20(_loan.token).safeTransferFrom(msg.sender, address(_vault), _amount);
 
-        uint256 _principalRepaid = _amount > _loan.principal ? _loan.principal : _amount;
+        uint256 _principalRepaid = _amount > _oldPrincipal ? _oldPrincipal : _amount;
         s._updateVaultRepays(_loan.token, _principalRepaid);
 
         _vault.repay(_amount);
