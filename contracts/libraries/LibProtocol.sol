@@ -275,7 +275,7 @@ library LibProtocol {
         s.s_positionBorrowedLastUpdate[_positionId][_token] = block.timestamp;
 
         uint256 capitalizedInterest = _calculateUserDebt(s, _positionId, _token, 0) - _tokenBorrow;
-        s._updateVaultBorrows(_token, _amount + capitalizedInterest);
+        s._updateVaultBorrows(_token, capitalizedInterest);
 
         TokenVault _vault = s.i_tokenVault[_token];
         _vault.borrow(msg.sender, _amount);

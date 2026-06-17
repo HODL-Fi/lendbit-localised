@@ -17,6 +17,7 @@ import "../contracts/models/Protocol.sol";
 import "../contracts/models/Error.sol";
 import "../contracts/models/Event.sol";
 import {Base} from "./Base.t.sol";
+import {TokenVault} from "../contracts/TokenVault.sol";
 
 contract ProtocolTest is Base {
     function setUp() public override {
@@ -1731,5 +1732,29 @@ contract ProtocolTest is Base {
         vm.expectRevert(abi.encodeWithSelector(HEALTH_FACTOR_TOO_LOW.selector, 0));
         protocolF.withdrawCollateral(address(token1), collateralAmount);
         vm.stopPrank();
+    }
+
+    function testBorrowDoubleCountingBugFix() public {
+        // H-02
+        // Testing that the total borrows in the vault is equal to the amount borrowed by the user
+        createVaultAndFund(1000000e18);
+        uint256 _collateralAmount = 10000 * 1e18; // $15M worth of token1 (10k * $1500)
+        uint256 _borrowAmount = 1000 * 1e6; // $250k worth of token4 (1k * $250)
+
+        // Deposit collateral first
+        token1.mint(user1, _collateralAmount);
+
+        vm.startPrank(user1);
+        token1.approve(address(diamond), _collateralAmount);
+        protocolF.depositCollateral(address(token1), _collateralAmount);
+
+        protocolF.borrow(address(token4), _borrowAmount);
+        vm.stopPrank();
+
+        VaultConfiguration memory config = vaultManagerF.getTokenVaultConfig(address(token4));
+        uint256 totalBorrowInVault = TokenVault(vault).totalBorrow();
+
+        assertEq(totalBorrowInVault, _borrowAmount);
+        assertEq(config.totalBorrows, _borrowAmount);
     }
 }
