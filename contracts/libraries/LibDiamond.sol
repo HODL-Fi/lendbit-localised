@@ -58,6 +58,7 @@ library LibDiamond {
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     function setContractOwner(address _newOwner) internal {
+        if (_newOwner == address(0)) revert NoZeroAddress();
         DiamondStorage storage ds = diamondStorage();
         address previousOwner = ds.contractOwner;
         ds.contractOwner = _newOwner;

@@ -5,3 +5,8 @@ cache
 .env
 lib/
 broadcast
+
+# medusa fuzzing
+medusa-corpus
+crytic-export
+slither_results.json

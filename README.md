@@ -1,7 +1,7 @@
 [![Mentioned in Awesome Foundry](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/crisgarner/awesome-foundry)
-# LendBit: Localised Lending Diamonds
+# HODL: Localised Lending Diamonds
 
-LendBit brings collateralised crypto lending to local markets. The protocol is built on the [EIP-2535 Diamond](https://eips.ethereum.org/EIPS/eip-2535) standard, supports multi-asset vaults, Chainlink-powered price feeds, tenured loans, local-currency abstractions, and now an Aave-integrated yield layer that keeps collateral productive.
+HODL brings collateralised crypto lending to local markets. The protocol is built on the [EIP-2535 Diamond](https://eips.ethereum.org/EIPS/eip-2535) standard, supports multi-asset vaults, Chainlink-powered price feeds, tenured loans, local-currency abstractions, and now an Aave-integrated yield layer that keeps collateral productive.
 
 This repository hosts the on-chain contracts, deployment scripts, and Foundry test suite.
 

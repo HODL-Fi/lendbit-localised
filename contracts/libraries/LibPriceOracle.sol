@@ -82,19 +82,21 @@ library LibPriceOracle {
 
         // Normalize to 18 decimals
         uint8 _decimals = LibUtils._getTokenDecimals(_token);
-        uint256 _usdValue = _calculateTokenUSDEquivalent(_decimals, _price, _amount);
+        uint8 _feedDecimals = _getPriceDecimals(s, _token);
+        uint256 _usdValue = _calculateTokenUSDEquivalent(_decimals, _feedDecimals, _price, _amount);
 
         return (_price, _usdValue);
     }
 
-    function _calculateTokenUSDEquivalent(uint8 _decimals, uint256 _price, uint256 _amount)
+    function _calculateTokenUSDEquivalent(uint8 _decimals, uint8 _feedDecimals, uint256 _price, uint256 _amount)
         internal
         pure
         returns (uint256 _usdValue)
     {
         if (_amount == 0) return _usdValue;
 
-        uint256 scaledPrice = _price * (10 ** (Constants.PRECISION_SCALE - 8)); // e.g., 1e10 if PRECISION is 1e18
+        // Scale the feed price up from its native decimals to PRECISION_SCALE (18)
+        uint256 scaledPrice = _price * (10 ** (Constants.PRECISION_SCALE - _feedDecimals));
         _usdValue = (scaledPrice * _amount) / (10 ** _decimals);
     }
 

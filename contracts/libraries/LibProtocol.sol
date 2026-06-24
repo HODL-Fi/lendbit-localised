@@ -39,14 +39,18 @@ library LibProtocol {
         if (!s.s_supportedCollateralTokens[_token]) revert TOKEN_NOT_SUPPORTED(_token);
         _allowanceAndBalanceCheck(_token, _amount);
 
-        s.s_positionCollateral[_positionId][_token] += _amount;
+        uint256 _creditedAmount = _amount;
 
         if (_token != Constants.NATIVE_TOKEN) {
+            uint256 _before = IERC20(_token).balanceOf(address(this));
             IERC20(_token).safeTransferFrom(msg.sender, address(this), _amount);
+            _creditedAmount = IERC20(_token).balanceOf(address(this)) - _before;
         }
 
+        s.s_positionCollateral[_positionId][_token] += _creditedAmount;
+
         LibYieldStrategy._rebalancePosition(s, _positionId, _token);
-        emit CollateralDeposited(_positionId, _token, _amount);
+        emit CollateralDeposited(_positionId, _token, _creditedAmount);
     }
 
     function _withdrawCollateral(LibAppStorage.StorageLayout storage s, address _token, uint256 _amount) internal {
