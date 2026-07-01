@@ -824,7 +824,8 @@ contract ProtocolTest is Base {
             targetChainId: block.chainid,
             nonce: 1,
             contractAddress: address(protocolF),
-            wallet: user1
+            wallet: user1,
+            deadline: 0
         });
 
         bytes32 digest = _borrowRequestDigest(request);
@@ -854,6 +855,71 @@ contract ProtocolTest is Base {
         );
     }
 
+    function testRequestBorrowFailsAfterDeadline() public {
+        createVaultAndFund(1000000e18);
+        uint256 positionId = depositCollateralFor(user1, address(token1), 10000 * 1e18);
+
+        uint256 signerPrivateKey = 0xA11CE;
+        positionManagerF.setRequestBorrowSigner(vm.addr(signerPrivateKey));
+
+        uint256 deadline = block.timestamp + 1 hours;
+        BorrowRequest memory request = BorrowRequest({
+            action: "BORROW_REQUEST",
+            positionId: positionId,
+            token: address(token4),
+            amount: 1000 * 1e6,
+            tenureSeconds: 30 days,
+            sourceChainId: block.chainid,
+            targetChainId: block.chainid,
+            nonce: 1,
+            contractAddress: address(protocolF),
+            wallet: user1,
+            deadline: deadline
+        });
+
+        bytes32 digest = _borrowRequestDigest(request);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        // warp one second past the signed deadline -> hub rejects the stale request
+        vm.warp(deadline + 1);
+        vm.startPrank(user1);
+        vm.expectRevert(abi.encodeWithSelector(REQUEST_BORROW_EXPIRED.selector, deadline, deadline + 1));
+        protocolF.requestBorrow(request, signature);
+        vm.stopPrank();
+    }
+
+    function testRequestBorrowSucceedsWithinDeadline() public {
+        createVaultAndFund(1000000e18);
+        uint256 positionId = depositCollateralFor(user1, address(token1), 10000 * 1e18);
+
+        uint256 signerPrivateKey = 0xA11CE;
+        positionManagerF.setRequestBorrowSigner(vm.addr(signerPrivateKey));
+
+        BorrowRequest memory request = BorrowRequest({
+            action: "BORROW_REQUEST",
+            positionId: positionId,
+            token: address(token4),
+            amount: 1000 * 1e6,
+            tenureSeconds: 30 days,
+            sourceChainId: block.chainid,
+            targetChainId: block.chainid,
+            nonce: 1,
+            contractAddress: address(protocolF),
+            wallet: user1,
+            deadline: block.timestamp + 1 hours
+        });
+
+        bytes32 digest = _borrowRequestDigest(request);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        vm.prank(user1);
+        uint256 loanId = protocolF.requestBorrow(request, signature);
+        assertEq(loanId, 1, "request within deadline should fulfil");
+        assertEq(token4.balanceOf(user1), 1000 * 1e6, "borrowed amount transfers to borrower");
+    }
+
     function testRequestBorrowFailsWitPositionIdMismatch() public {
         createVaultAndFund(1000000e18);
         uint256 collateralAmount = 10000 * 1e18;
@@ -876,7 +942,8 @@ contract ProtocolTest is Base {
             targetChainId: block.chainid,
             nonce: 1,
             contractAddress: address(protocolF),
-            wallet: user1
+            wallet: user1,
+            deadline: 0
         });
 
         bytes32 digest = _borrowRequestDigest(request);
@@ -894,7 +961,7 @@ contract ProtocolTest is Base {
         createVaultAndFund(1000 * 1e6);
 
         uint256 collateralAmount = 1000 * 1e18; // Sufficient collateral
-        uint256 borrowAmount = 801 * 1e6; // Borrowing > 80% of totalDeposits (which is MAX_UTILIZATION)
+        uint256 borrowAmount = 901 * 1e6; // Borrowing > 90% of totalDeposits (which is MAX_UTILIZATION)
         uint256 tenure = 30 days;
 
         uint256 positionId = depositCollateralFor(user1, address(token1), collateralAmount);
@@ -913,7 +980,8 @@ contract ProtocolTest is Base {
             targetChainId: block.chainid,
             nonce: 1,
             contractAddress: address(protocolF),
-            wallet: user1
+            wallet: user1,
+            deadline: 0
         });
 
         bytes32 digest = _borrowRequestDigest(request);
@@ -988,8 +1056,8 @@ contract ProtocolTest is Base {
         token1.approve(address(diamond), _collateralAmount);
         protocolF.depositCollateral(address(token1), _collateralAmount);
 
-        // Attempt to borrow more than 80% (Constants.MAX_UTILIZATION) of total deposits
-        uint256 _borrowAmount = 801 * 1e6;
+        // Attempt to borrow more than 90% (Constants.MAX_UTILIZATION) of total deposits
+        uint256 _borrowAmount = 901 * 1e6;
 
         vm.expectRevert(abi.encodeWithSelector(TOKEN_OVERUTILIZATION.selector));
         protocolF.takeLoan(address(token4), _borrowAmount, 30 days);
@@ -1264,7 +1332,8 @@ contract ProtocolTest is Base {
                 _request.targetChainId,
                 _request.nonce,
                 _request.contractAddress,
-                _request.wallet
+                _request.wallet,
+                _request.deadline
             )
         );
         return MessageHashUtils.toEthSignedMessageHash(messageHash);

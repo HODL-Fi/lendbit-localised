@@ -24,8 +24,17 @@ contract TokenVaultTest is Base {
     function setUp() public override {
         super.setUp();
 
-        tokenVault = new TokenVault(address(token3), "Hodl CNGN", "HCNGN", address(diamond), 2000);
+        tokenVault = new TokenVault(address(token3), "Hodl CNGN", "HCNGN", address(diamond), 2000, 0);
     }
+
+    /// @dev `repay` now takes (principal, interest). Reproduce the old
+    ///      principal-first split so these accrual-model assertions are unchanged.
+    function _repaySplit(uint256 amount) internal {
+        uint256 tb = tokenVault.totalBorrow();
+        uint256 p = amount > tb ? tb : amount;
+        tokenVault.repay(p, amount - p);
+    }
+
 
     function testVaultDeposit() public {
         uint256 _amount = 100_000e8;
@@ -124,14 +133,14 @@ contract TokenVaultTest is Base {
         assertEq(token3.balanceOf(address(tokenVault)), 250_000e6);
 
         token3.transfer(address(tokenVault), _amount);
-        tokenVault.repay(_amount);
+        _repaySplit(_amount);
 
         vm.warp(365 days + 1); // for some reason using block.timestamp + 365 days / 2 still returns the old timestamp, so hardcoding it here
 
         assertEq(tokenVault.totalAssets(), (470_000e6 + 10_000e6));
 
         token3.transfer(address(tokenVault), _amount / 2);
-        tokenVault.repay(_amount / 2);
+        _repaySplit(_amount / 2);
 
         vm.warp(365 days + 1 + (365 days / 2)); // warp another 6 months to accrue more interest on the remaining loan
 
@@ -215,7 +224,7 @@ contract TokenVaultTest is Base {
 
         // repay interest-first scenario
         token3.transfer(address(tokenVault), _amount);
-        tokenVault.repay(_amount);
+        _repaySplit(_amount);
 
         vm.warp(365 days + 1); // for some reason using block.timestamp + 365 days / 2 still returns the old timestamp, so hardcoding it here
         assertEq(block.timestamp, 365 days + 1);
@@ -506,7 +515,7 @@ contract TokenVaultTest is Base {
         token3.mint(address(diamond), _amount / 2);
         token3.approve(address(tokenVault), type(uint256).max);
         token3.transfer(address(tokenVault), _amount / 2);
-        tokenVault.repay(_amount / 2); // 50_000e6 paid is already accounted for in totalAssets
+        _repaySplit(_amount / 2); // 50_000e6 paid is already accounted for in totalAssets
         vm.stopPrank();
 
         assertEq(tokenVault.totalAssets(), totalAssetsAfterBadDebt);
@@ -612,14 +621,17 @@ contract TokenVaultTest is Base {
         protocolF.repayLoan(_loanId, 100e6);
 
         (uint256 _totalAssets, uint256 _borrows) = vaultManagerF.getTokenVaultDetails(address(token4));
-        assertEq(_borrows, 100e6); // after repayment
+        // interest-first (#12): repaying 100e6 covers 20e6 interest + 80e6 principal,
+        // leaving 120e6 principal outstanding (consistent with the loan's principal)
+        assertEq(_borrows, 120e6);
         uint256 _assets = vault.totalAssets();
         assertEq(_totalAssets, _assets);
         assertEq(_assets, (500e6 + 100e6 + 20e6)); // after repayment, total assets should be deposits + transfers + remaining borrows + accrued interest
 
         vm.warp(365 days + 1); // for some reason using block.timestamp + 365 days / 2 still returns the old timestamp, so hardcoding it here
 
-        assertEq(vault.totalAssets(), (500e6 + 100e6 + 20e6 + 10e6));
+        // 12e6 accrues over the next 6 months on the 120e6 remaining principal
+        assertEq(vault.totalAssets(), (500e6 + 120e6 + 12e6));
         (,,, uint256 repaid,,, uint256 debt,,,) = gettersF.getLoanDetails(_loanId);
         assertEq(repaid, 100e6);
         assertEq(debt, 132e6); // after 6 months, 10e6 interest should have accrued on the remaining 100e6 borrow

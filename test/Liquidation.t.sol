@@ -52,7 +52,7 @@ contract LiquidationTest is Base {
         uint256 _debt = gettersF.getBorrowDetails(_positionId, address(token4));
 
         // Make position liquidatable
-        MockV3Aggregator(pricefeed1).updateAnswer(1300e8);
+        MockV3Aggregator(pricefeed1).updateAnswer(1200e8);
 
         assertTrue(liquidationF.isLiquidatable(_positionId));
 
@@ -79,7 +79,7 @@ contract LiquidationTest is Base {
         assertEq(gettersF.getBorrowDetails(_positionId, address(token4)), 0); // new outstanding debt is zero
         assertEq(_userCollateralBefore, _userCollateralNow + _liquidatorBalance);
         assertEq(_vaultBalanceBefore + _debt, token4.balanceOf(gettersF.getTokenVault(address(token4))));
-        assertLe(_vaultTotalAssetBefore, gettersF.getVaultTotalAssets(address(token4))); // not stable because vault use fixed rate but pool positions are variable rate
+        assertLe(_vaultTotalAssetBefore, gettersF.getVaultTotalAssets(address(token4))); // vault accrual and pooled positions now share the fixed rate, so assets only grow on repayment
         assertGt(_borrowAmount, token4.balanceOf(liquidator));
         assertLt(_t1BalanceBefore, token1.balanceOf(liquidator));
     }
@@ -96,7 +96,7 @@ contract LiquidationTest is Base {
         updatePricefeedsData();
 
         // Make position liquidatable
-        MockV3Aggregator(pricefeed1).updateAnswer(1300e8);
+        MockV3Aggregator(pricefeed1).updateAnswer(1200e8);
 
         assertTrue(liquidationF.isLiquidatable(_positionId));
 
@@ -122,7 +122,7 @@ contract LiquidationTest is Base {
         assertEq(gettersF.getBorrowDetails(_positionId, address(token4)), 0); // new outstanding debt is zero
         assertEq(_userCollateralBefore, _userCollateralNow + liquidator.balance);
         assertEq(_vaultBalanceBefore + _debt, token4.balanceOf(gettersF.getTokenVault(address(token4))));
-        assertLe(_vaultTotalAssetBefore, gettersF.getVaultTotalAssets(address(token4))); // not stable because vault use fixed rate but pool positions are variable rate
+        assertLe(_vaultTotalAssetBefore, gettersF.getVaultTotalAssets(address(token4))); // vault accrual and pooled positions now share the fixed rate, so assets only grow on repayment
         vm.assertGt(_borrowAmount, token4.balanceOf(liquidator));
         vm.assertLt(_t1BalanceBefore, liquidator.balance);
         vm.assertGt(_userCollateralBefore, gettersF.getPositionCollateral(_positionId, address(1)));

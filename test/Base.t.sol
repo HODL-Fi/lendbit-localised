@@ -57,7 +57,7 @@ contract Base is Test, IDiamondCut {
         totalBorrows: 0,
         baseRate: 2000,
         slopeRate: 3000,
-        reserveFactor: 2000,
+        reserveFactor: 0, // default: no protocol reserve cut (reserve feature exercised in dedicated tests)
         optimalUtilization: 8000,
         liquidationBonus: 500,
         lastUpdated: block.timestamp
