@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {Constants} from "./models/Constant.sol";
 
@@ -161,17 +162,28 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         // accrue interest up to now (non-compounding)
         _accrueInterest();
 
-        // Calculate shares (based on snapshot after accrual, before transfer)
-        shares = previewDeposit(assets);
-        if (shares == 0) revert InvalidAmount();
+        // Snapshot the pre-transfer share supply and asset base. Shares must be
+        // minted from the amount the vault ACTUALLY receives, not the nominal
+        // `assets`: a fee-on-transfer token delivers less on this second hop, so
+        // minting `previewDeposit(assets)` over-mints shares against real assets
+        // (#5). Computing shares against the pre-transfer snapshot keeps the
+        // ERC4626 exchange rate exact (matches OZ `_convertToShares`, offset 0).
+        uint256 _supply = totalSupply();
+        uint256 _assetsBefore = totalAssets();
 
         // Transfer assets from sender to this vault
+        uint256 _balBefore = IERC20(asset()).balanceOf(address(this));
         IERC20(asset()).safeTransferFrom(msg.sender, address(this), assets);
+        uint256 _received = IERC20(asset()).balanceOf(address(this)) - _balBefore;
+        if (_received == 0) revert InvalidAmount();
+
+        shares = Math.mulDiv(_received, _supply + 1, _assetsBefore + 1);
+        if (shares == 0) revert InvalidAmount();
 
         // Mint shares to receiver
         _mint(receiver, shares);
 
-        emit Deposit(msg.sender, receiver, assets, shares);
+        emit Deposit(msg.sender, receiver, _received, shares);
         return shares;
     }
 

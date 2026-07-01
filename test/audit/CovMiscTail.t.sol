@@ -12,7 +12,8 @@ import {
     INSUFFICIENT_COLLATERAL,
     OnlyRouterCanFulfill,
     UnexpectedRequestID,
-    ONLY_SECURITY_COUNCIL
+    ONLY_SECURITY_COUNCIL,
+    REPAYMENT_BELOW_INTEREST
 } from "../../contracts/models/Error.sol";
 
 /// @dev Minimal Chainlink Functions router stub. Returns a deterministic request
@@ -287,7 +288,7 @@ contract CovMiscTailTest is Base {
         vm.stopPrank();
     }
 
-    function test_liquidation_loan_interestOnly_repaid_principalUnchanged() public {
+    function test_liquidation_loan_belowInterest_reverts() public {
         address liquidator = mkaddr("covLiquidator2");
         createVaultAndFund(1_000e6);
         uint256 _positionId = depositCollateralFor(user1, address(token1), 5 ether); // $7,500
@@ -308,15 +309,19 @@ contract CovMiscTailTest is Base {
         MockV3Aggregator(pricefeed1).updateAnswer(1320e8);
         assertTrue(liquidationF.isLiquidatable(_positionId));
 
-        // repay strictly less than the interest due -> principalRepaid == 0 branch
+        // A liquidation paying strictly less than the accrued interest must now
+        // revert (finding #3) — otherwise it would reset the interest anchor and
+        // wipe the unpaid interest while principal remained.
         uint256 _payback = _interestDue / 2;
         token4.mint(liquidator, _payback);
         vm.startPrank(liquidator);
         token4.approve(address(liquidationF), _payback);
+        vm.expectRevert(abi.encodeWithSelector(REPAYMENT_BELOW_INTEREST.selector, _payback, _interestDue));
         liquidationF.liquidateLoan(_loanId, _payback, address(token1));
         vm.stopPrank();
 
+        // Principal is untouched because the liquidation reverted.
         (,, uint256 principalAfter,,,,,,,) = gettersF.getLoanDetails(_loanId);
-        assertEq(principalAfter, principalBefore, "interest-only liquidation leaves principal intact");
+        assertEq(principalAfter, principalBefore, "reverted liquidation leaves principal intact");
     }
 }

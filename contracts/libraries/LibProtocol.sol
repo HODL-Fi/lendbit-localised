@@ -198,6 +198,13 @@ library LibProtocol {
         uint256 _loanId = ++s.s_nextLoanId;
         s.s_loans[_loanId] = _loan;
         s.s_positionActiveLoanIds[_request.positionId].push(_loanId);
+        // Record the immutable principal + origination timestamp, mirroring
+        // `_takeLoan`. Without these, `s_loanStartTime[_loanId] == 0` and
+        // `_outstandingBalance` falls back to the resettable `_loan.startTimestamp`,
+        // so a partial repayment could move maturity / the penalty clock for a
+        // request-borrow loan — the #6 fix would not cover this path.
+        s.s_loanPrincipal[_loanId] = _request.amount;
+        s.s_loanStartTime[_loanId] = block.timestamp;
 
         s._updateVaultBorrows(_loan.token, _loan.principal);
 
@@ -303,7 +310,14 @@ library LibProtocol {
         }
 
         TokenVault _vault = s.i_tokenVault[_loan.token];
+        // Book debt/vault accounting against what the vault ACTUALLY received. A
+        // fee-on-transfer token delivers less than the nominal `_amount`, so
+        // reducing debt by `_amount` would credit the borrower more than the LPs
+        // received (#6). Fail closed if the vault is short-changed.
+        uint256 _before = IERC20(_loan.token).balanceOf(address(_vault));
         IERC20(_loan.token).safeTransferFrom(msg.sender, address(_vault), _amount);
+        uint256 _received = IERC20(_loan.token).balanceOf(address(_vault)) - _before;
+        if (_received != _amount) revert AMOUNT_MISMATCH(_received, _amount);
 
         s._updateVaultRepays(_loan.token, _principalRepaid);
         _vault.repay(_principalRepaid, _amount - _principalRepaid);
@@ -396,7 +410,11 @@ library LibProtocol {
         uint256 _principalRepaid = _repayStateChanges(s, _params);
         TokenVault _vault = s.i_tokenVault[_token];
 
+        // Book against the amount actually received (fee-on-transfer safe, #6).
+        uint256 _before = IERC20(_token).balanceOf(address(_vault));
         IERC20(_token).safeTransferFrom(msg.sender, address(_vault), _amount);
+        uint256 _received = IERC20(_token).balanceOf(address(_vault)) - _before;
+        if (_received != _amount) revert AMOUNT_MISMATCH(_received, _amount);
         _vault.repay(_principalRepaid, _amount - _principalRepaid);
 
         emit Repay(_positionId, _token, _amount);
@@ -418,10 +436,17 @@ library LibProtocol {
         s.s_positionBorrowed[_params.positionId][_params.token] = _totalDebt - _params.amount;
         s.s_positionBorrowedLastUpdate[_params.positionId][_params.token] = block.timestamp;
 
-        // Decrement the borrow tally by the principal portion only — the interest
-        // portion of the repayment was never added to the tally at origination.
+        // Interest-first allocation (mirrors `_repayLoanFor` / `_liquidateLoan`):
+        // a repayment covers accrued interest before any principal. Reducing
+        // principal first (the old behaviour) let an interest-only repayment
+        // shrink the principal tally while interest went uncollected —
+        // understating `totalBorrows` / utilization and mis-splitting the vault's
+        // principal/interest booking so LP interest leaks to borrowers (#4).
         uint256 _principalOutstanding = s.s_positionPrincipal[_params.positionId][_params.token];
-        _principalRepaid = _params.amount > _principalOutstanding ? _principalOutstanding : _params.amount;
+        uint256 _interestDue = _totalDebt > _principalOutstanding ? _totalDebt - _principalOutstanding : 0;
+        _principalRepaid = _params.amount > _interestDue
+            ? (_params.amount - _interestDue > _principalOutstanding ? _principalOutstanding : _params.amount - _interestDue)
+            : 0;
         s.s_positionPrincipal[_params.positionId][_params.token] = _principalOutstanding - _principalRepaid;
         s._updateVaultRepays(_params.token, _principalRepaid);
     }

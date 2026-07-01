@@ -80,6 +80,13 @@ library LibLiquidation {
         // only (never fold interest into principal: #12). The pool borrow tally
         // and vault are then decremented by that exact principal.
         uint256 _interestDue = _loanDebt - _oldPrincipal;
+
+        // A liquidation payment must at least cover the accrued interest + penalty.
+        // Otherwise a dust liquidation resets `startTimestamp` below (moving the
+        // interest anchor to now) while repaying no principal — wiping unpaid
+        // fixed-loan interest while the principal remains (#3).
+        if (_amount < _interestDue) revert REPAYMENT_BELOW_INTEREST(_amount, _interestDue);
+
         uint256 _principalRepaid = _amount > _interestDue ? _amount - _interestDue : 0;
 
         // update outstanding loan here
@@ -98,7 +105,11 @@ library LibLiquidation {
 
         TokenVault _tokenVault = s.i_tokenVault[_loan.token];
 
+        // Book against the amount actually received (fee-on-transfer safe, #6).
+        uint256 _before = IERC20(_loan.token).balanceOf(address(_tokenVault));
         IERC20(_loan.token).safeTransferFrom(msg.sender, address(_tokenVault), _amount);
+        uint256 _received = IERC20(_loan.token).balanceOf(address(_tokenVault)) - _before;
+        if (_received != _amount) revert AMOUNT_MISMATCH(_received, _amount);
         _tokenVault.repay(_principalRepaid, _amount - _principalRepaid);
 
         LibProtocol._transferToken(_collateralToken, msg.sender, _amountToLiquidate);
@@ -142,7 +153,11 @@ library LibLiquidation {
         uint256 _principalRepaid = s._repayStateChanges(_params);
 
         TokenVault _tokenVault = s.i_tokenVault[_token];
+        // Book against the amount actually received (fee-on-transfer safe, #6).
+        uint256 _before = IERC20(_token).balanceOf(address(_tokenVault));
         IERC20(_token).safeTransferFrom(msg.sender, address(_tokenVault), _amount);
+        uint256 _received = IERC20(_token).balanceOf(address(_tokenVault)) - _before;
+        if (_received != _amount) revert AMOUNT_MISMATCH(_received, _amount);
         _tokenVault.repay(_principalRepaid, _amount - _principalRepaid);
 
         LibProtocol._transferToken(_collateralToken, msg.sender, _amountToLiquidate);
