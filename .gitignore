@@ -10,3 +10,12 @@ broadcast
 medusa-corpus
 crytic-export
 slither_results.json
+
+# coverage & logs
+lcov.info
+*.log
+
+# audit tooling artifacts (regenerable)
+.audit-prep/
+aderyn-report.md
+slither-fresh.json
