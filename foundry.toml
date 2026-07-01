@@ -4,6 +4,8 @@ out = 'out'
 libs = ['lib']
 ffi = true
 viaIR = true
+solc = '0.8.30'
+evm_version = 'cancun'
 optimizer = true
 optimizer_runs = 1000
 verbosity = 5
@@ -15,6 +17,12 @@ remappings = [
     '@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/',
     'openzeppelin-contracts/=lib/openzeppelin-contracts/',
 ]
+
+# Contract verification — set the API key via env (e.g. ETHERSCAN_API_KEY) and
+# pass `--verify` to `forge create`/`forge script`. Override `chain`/`url` per network.
+[etherscan]
+mainnet = { key = "${ETHERSCAN_API_KEY}" }
+sepolia = { key = "${ETHERSCAN_API_KEY}", chain = 11155111 }
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
 [lint]

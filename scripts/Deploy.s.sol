@@ -164,7 +164,11 @@ contract Deployment is Script, IDiamondCut {
 
         // Setup initial collateral tokens
         _setupInitialCollateralAndBorrowTokens();
-        protocolF.setInterestRate(2000, 500);
+        // 27.78% APR with the 20% reserveFactor yields ~20% LP / ~5% protocol on
+        // deposited capital at the 90% utilization cap (MAX_UTILIZATION). The pool
+        // can't reach 100% utilization, so the APR is grossed up by 1/0.9 to let
+        // LPs still realize 20% on their deposit.
+        protocolF.setInterestRate(2778, 500);
 
         positionManagerF.createPositionFor(msg.sender);
         ERC20Mock(token3).mint(msg.sender, 500000e6); // mint 500000 CNGN to msg.sender
