@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.30;
+pragma solidity 0.8.30;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Constants} from "../models/Constant.sol";
 
+/// @title LibUtils — Token decimal normalization and USD/token amount conversion helpers
 library LibUtils {
     /// @notice Normalizes a token amount to 18 decimals of precision
     /// @dev Converts token amounts to standard 18-decimal representation for consistent internal calculations

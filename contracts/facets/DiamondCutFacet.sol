@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.30;
 
 /******************************************************************************\
 * Author: Nick Mudge <nick@perfectabstractions.com> (https://twitter.com/mudgen)
@@ -9,6 +9,7 @@ pragma solidity ^0.8.0;
 import {IDiamondCut} from "../interfaces/IDiamondCut.sol";
 import {LibDiamond} from "../libraries/LibDiamond.sol";
 
+/// @title DiamondCutFacet — owner-gated facet that adds, replaces, or removes diamond functions
 contract DiamondCutFacet is IDiamondCut {
     /// @notice Add/replace/remove any number of functions and optionally execute
     ///         a function with delegatecall

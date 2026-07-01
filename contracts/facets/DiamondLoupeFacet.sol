@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.30;
 /******************************************************************************\
 * Author: Nick Mudge <nick@perfectabstractions.com> (https://twitter.com/mudgen)
 * EIP-2535 Diamonds: https://eips.ethereum.org/EIPS/eip-2535
@@ -9,6 +9,7 @@ import {LibDiamond} from "../libraries/LibDiamond.sol";
 import {IDiamondLoupe} from "../interfaces/IDiamondLoupe.sol";
 import {IERC165} from "../interfaces/IERC165.sol";
 
+/// @title DiamondLoupeFacet — read-only introspection of the diamond's facets and supported interfaces
 contract DiamondLoupeFacet is IDiamondLoupe, IERC165 {
     // Diamond Loupe Functions
     ////////////////////////////////////////////////////////////////////
@@ -62,6 +63,9 @@ contract DiamondLoupeFacet is IDiamondLoupe, IERC165 {
     }
 
     // This implements ERC-165.
+    /// @notice Reports whether the diamond has registered support for the given ERC-165 interface id.
+    /// @param _interfaceId The ERC-165 interface identifier to query.
+    /// @return True if the interface id is marked as supported in diamond storage, false otherwise.
     function supportsInterface(bytes4 _interfaceId) external view override returns (bool) {
         LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
         return ds.supportedInterfaces[_interfaceId];

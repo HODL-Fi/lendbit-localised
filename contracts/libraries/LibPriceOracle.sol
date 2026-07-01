@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.30;
+pragma solidity 0.8.30;
 
 import {IFunctionsRouter} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/interfaces/IFunctionsRouter.sol";
 import {FunctionsRequest} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/libraries/FunctionsRequest.sol";
@@ -31,6 +31,9 @@ import {Constants} from "../models/Constant.sol";
 library LibPriceOracle {
     using FunctionsRequest for FunctionsRequest.Request;
 
+    /// @notice Reads the latest Chainlink price for `_token`, reverting on an unsupported token, non-positive answer, mismatched round, or stale update.
+    /// @param _token The token whose configured price feed is read.
+    /// @return A staleness flag (always false on success) and the latest price answer in feed decimals.
     function _getPriceData(LibAppStorage.StorageLayout storage s, address _token)
         internal
         view
@@ -50,6 +53,8 @@ library LibPriceOracle {
         if (_threshold == 0) _threshold = Constants.DEFAULT_STALENESS_THRESHOLD;
         if (block.timestamp - _updatedAt > _threshold) revert STALE_PRICE_FEED(_pricefeed);
 
+        // `_answer` is guarded `> 0` above, so the int256->uint256 cast cannot truncate.
+        // forge-lint: disable-next-line(unsafe-typecast)
         return (false, uint256(_answer));
     }
 
@@ -62,6 +67,9 @@ library LibPriceOracle {
         s.s_priceFeedStalenessThreshold[_token] = _threshold;
     }
 
+    /// @notice Returns the decimal precision of `_token`'s configured price feed, reverting if the token is unsupported.
+    /// @param _token The token whose price feed decimals are queried.
+    /// @return The price feed's decimals.
     function _getPriceDecimals(LibAppStorage.StorageLayout storage s, address _token) internal view returns (uint8) {
         address _pricefeed = s.s_tokenPriceFeed[_token];
         if (_pricefeed == address(0)) revert TOKEN_NOT_SUPPORTED(_token);
@@ -69,6 +77,10 @@ library LibPriceOracle {
         return AggregatorV3Interface(_pricefeed).decimals();
     }
 
+    /// @notice Computes the USD value of `_amount` of `_token` using its price feed, returning (0, 0) for a zero amount.
+    /// @param _token The token to value.
+    /// @param _amount The token amount in the token's native decimals.
+    /// @return The feed price and the corresponding USD value.
     function _getTokenValueInUSD(LibAppStorage.StorageLayout storage s, address _token, uint256 _amount)
         internal
         view
@@ -88,6 +100,12 @@ library LibPriceOracle {
         return (_price, _usdValue);
     }
 
+    /// @notice Scales `_price` up to 18 decimals and multiplies by `_amount` to produce the USD value of the token amount.
+    /// @param _decimals The token's decimals.
+    /// @param _feedDecimals The price feed's decimals.
+    /// @param _price The feed price in `_feedDecimals`.
+    /// @param _amount The token amount in `_decimals`.
+    /// @return _usdValue The USD value (0 when `_amount` is 0).
     function _calculateTokenUSDEquivalent(uint8 _decimals, uint8 _feedDecimals, uint256 _price, uint256 _amount)
         internal
         pure
@@ -100,6 +118,12 @@ library LibPriceOracle {
         _usdValue = (scaledPrice * _amount) / (10 ** _decimals);
     }
 
+    /// @notice Sets the Chainlink Functions gas limit and wires up the router, LINK token, DON ID, and subscription.
+    /// @param _donID The DON identifier.
+    /// @param _router The Functions router address.
+    /// @param _linkToken The LINK token address.
+    /// @param _gasLimit The callback gas limit.
+    /// @param _subscriptionId The Functions subscription ID.
     function _initializePriceOracle(
         LibAppStorage.StorageLayout storage s,
         bytes32 _donID,
@@ -112,6 +136,11 @@ library LibPriceOracle {
         _setupRouter(s, _donID, _router, _linkToken, _subscriptionId);
     }
 
+    /// @notice Stores the DON ID, router, LINK token, and subscription ID, then emits FunctionsRouterChanged.
+    /// @param _donID The DON identifier.
+    /// @param _router The Functions router address.
+    /// @param _linkToken The LINK token address.
+    /// @param _subscriptionId The Functions subscription ID.
     function _setupRouter(
         LibAppStorage.StorageLayout storage s,
         bytes32 _donID,
@@ -127,6 +156,8 @@ library LibPriceOracle {
         emit FunctionsRouterChanged(msg.sender, _donID, _router);
     }
 
+    /// @notice Stores the JavaScript source executed by Chainlink Functions and emits FunctionsSourceChanged.
+    /// @param _source The Functions request source code.
     function _setupSource(LibAppStorage.StorageLayout storage s, string calldata _source) internal {
         s.s_source = _source;
         emit FunctionsSourceChanged(msg.sender, abi.encode(_source));
@@ -176,6 +207,11 @@ library LibPriceOracle {
         emit Response(_requestId, res.priceData, _response, _err);
     }
 
+    /// @notice Router-gated entry that fulfills `requestId` with the DON response and emits RequestFulfilled.
+    /// @param requestId The request ID being fulfilled.
+    /// @param response The aggregated DON response.
+    /// @param err The aggregated DON error.
+    /// @dev Reverts with OnlyRouterCanFulfill unless the caller is the configured Functions router.
     function _handleOracleFulfillment(
         LibAppStorage.StorageLayout storage s,
         bytes32 requestId,
@@ -189,6 +225,8 @@ library LibPriceOracle {
         emit RequestFulfilled(requestId);
     }
 
+    /// @notice Approves the router for `_amount` of LINK and funds the configured subscription via transferAndCall.
+    /// @param _amount The LINK amount to fund the subscription with.
     function _fundSubscription(LibAppStorage.StorageLayout storage s, uint256 _amount) internal {
         // Approve the router to spend the specified amount of LINK
         s.i_linkToken.approve(address(s.i_router), _amount);
@@ -201,6 +239,8 @@ library LibPriceOracle {
             );
     }
 
+    /// @notice Updates the stored Chainlink Functions subscription ID.
+    /// @param _subId The new subscription ID.
     function _setSubscriptionId(LibAppStorage.StorageLayout storage s, uint64 _subId) internal {
         s.s_subscriptionId = _subId;
     }

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.30;
+pragma solidity 0.8.30;
 
+// Protocol — Core data structures for loans, borrow requests, vault config, and oracle responses
+// Defines `Loan`, `BorrowRequest`, `VaultConfiguration`, the `LoanStatus` enum, and `FunctionResponse`.
 struct Loan {
     uint256 positionId;
     address token;
@@ -24,6 +26,7 @@ struct BorrowRequest {
     uint256 nonce;
     address contractAddress;
     address wallet;
+    uint256 deadline; // 0 = no expiry (optional); when non-zero the hub rejects after this timestamp
 }
 
 

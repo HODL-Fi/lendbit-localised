@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.30;
+pragma solidity 0.8.30;
 
 import {IFunctionsRouter} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/interfaces/IFunctionsRouter.sol";
 import {LinkTokenInterface} from "@chainlink/contracts/src/v0.8/shared/interfaces/LinkTokenInterface.sol";
@@ -9,6 +9,7 @@ import {TokenVault} from "../TokenVault.sol";
 import "../models/Protocol.sol";
 import "../models/Yield.sol";
 
+/// @title LibAppStorage — Diamond shared-storage layout and accessor for the lending protocol
 library LibAppStorage {
     struct StorageLayout {
         IFunctionsRouter i_router;
@@ -68,10 +69,17 @@ library LibAppStorage {
         mapping(uint256 => uint256) s_loanStartTime;
         mapping(address => uint32) s_priceFeedStalenessThreshold; // token address -> max age in seconds (0 = use default)
         uint256 s_reentrancyStatus; // 1 = not entered, 2 = entered (0 defaults to 1)
+        // Pooled outstanding principal per (position, token). Tracked separately
+        // from s_positionBorrowed (which capitalizes interest) so the borrow
+        // tally is decremented by principal only on repay. Appended at the end of
+        // the struct for upgrade-safe storage layout.
+        mapping(uint256 => mapping(address => uint256)) s_positionPrincipal;
     }
 
     bytes32 internal constant STORAGE_SLOT = keccak256("contracts.storage.LibAppStorage");
 
+    /// @notice Returns a storage pointer to the protocol's shared `StorageLayout` at a fixed diamond storage slot.
+    /// @return ds The storage reference to the protocol's application storage.
     function appStorage() internal pure returns (StorageLayout storage ds) {
         bytes32 slot = STORAGE_SLOT;
         assembly {

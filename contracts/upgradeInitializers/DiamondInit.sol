@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.30;
 
 /******************************************************************************\
 * Author: Nick Mudge <nick@perfectabstractions.com> (https://twitter.com/mudgen)
@@ -18,9 +18,12 @@ import {IERC165} from "../interfaces/IERC165.sol";
 // with data from a deployment script. Use the init function to initialize state variables
 // of your diamond. Add parameters to the init funciton if you need to.
 
+/// @title DiamondInit — One-time initializer that registers the diamond's supported ERC-165 interface IDs
 contract DiamondInit {
     // You can add parameters to this function in order to pass in
     // data to set your own state variables
+    /// @notice Registers the IERC165, IDiamondCut, IDiamondLoupe, and IERC173 interface IDs as supported in diamond storage.
+    /// @dev Intended to be executed via delegatecall during a diamond deployment or upgrade.
     function init() external {
         // adding ERC165 data
         LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();

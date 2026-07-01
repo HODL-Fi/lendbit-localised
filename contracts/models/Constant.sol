@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.30;
+pragma solidity 0.8.30;
 
+/// @title Constants — Protocol-wide constant values (thresholds, precision scales, and time units)
 /// @dev Holds all the constant for our protocol
 library Constants {
     uint16 constant LIQUIDATION_THRESHOLD = 9000;
     uint16 constant COLLATERALIZATION_RATIO = 8000;
-    uint16 constant MAX_UTILIZATION = 8000;
+    uint16 constant MAX_UTILIZATION = 9000;
     uint256 constant PRECISION = 1e18;
     uint256 constant PRICE_PRECISION = 1e10;
     uint256 constant MIN_HEALTH_FACTOR = 1e18;

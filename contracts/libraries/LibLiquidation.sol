@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.30;
+pragma solidity 0.8.30;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -18,11 +18,18 @@ import "../models/Protocol.sol";
 import {RepayStateChangeParams} from "../models/FunctionParams.sol";
 import {TokenVault} from "../TokenVault.sol";
 
+/// @title LibLiquidation — health checks and liquidation of undercollateralized positions
 library LibLiquidation {
     using LibPriceOracle for LibAppStorage.StorageLayout;
     using LibProtocol for LibAppStorage.StorageLayout;
     using SafeERC20 for IERC20;
 
+    /// @notice Determine whether a position is eligible for liquidation.
+    /// @dev True when total debt (open + active loans) exceeds the collateral value
+    ///      scaled by the liquidation threshold.
+    /// @param s The diamond storage layout.
+    /// @param _positionId The position to check.
+    /// @return True if the position can be liquidated.
     function _isLiquidatable(LibAppStorage.StorageLayout storage s, uint256 _positionId) internal view returns (bool) {
         uint256 _collateral = s._getPositionCollateralValue(_positionId);
         uint256 _debt = s._getPositionBorrowedValue(_positionId) + s._totalActiveDebt(_positionId);
@@ -32,6 +39,16 @@ library LibLiquidation {
         return _debt > _threshold;
     }
 
+    /// @notice Liquidate a fixed-term loan, repaying part of its debt and seizing the
+    ///         equivalent (bonus-adjusted) collateral for the liquidator.
+    /// @dev Clamps `_amount` to outstanding debt, applies interest-first allocation,
+    ///      closes the loan when principal hits zero, decrements vault borrows by the
+    ///      principal portion, pulls the repayment into the vault, and transfers the
+    ///      seized collateral to `msg.sender`.
+    /// @param s The diamond storage layout.
+    /// @param _loanId The loan being liquidated.
+    /// @param _amount The debt amount the liquidator repays (clamped to outstanding).
+    /// @param _collateralToken The collateral token seized from the position.
     function _liquidateLoan(
         LibAppStorage.StorageLayout storage s,
         uint256 _loanId,
@@ -57,9 +74,17 @@ library LibLiquidation {
         s.s_positionCollateral[_loan.positionId][_collateralToken] -= _amountToLiquidate;
         LibYieldStrategy._rebalanceForWithdrawal(s, _loan.positionId, _collateralToken, _amountToLiquidate);
 
+        uint256 _oldPrincipal = _loan.principal;
+
+        // interest-first allocation, principal reduced by the principal portion
+        // only (never fold interest into principal: #12). The pool borrow tally
+        // and vault are then decremented by that exact principal.
+        uint256 _interestDue = _loanDebt - _oldPrincipal;
+        uint256 _principalRepaid = _amount > _interestDue ? _amount - _interestDue : 0;
+
         // update outstanding loan here
         _loan.repaid += _amount;
-        _loan.principal = _loanDebt - _amount;
+        _loan.principal = _oldPrincipal - _principalRepaid;
         _loan.startTimestamp = block.timestamp;
 
         // If fully repaid, update loan status and move to closed loans
@@ -69,12 +94,12 @@ library LibLiquidation {
             s.s_positionClosedLoanIds[_loan.positionId].push(_loanId);
         }
 
-        LibVaultManager._updateVaultRepays(s, _loan.token, _amount);
+        LibVaultManager._updateVaultRepays(s, _loan.token, _principalRepaid);
 
         TokenVault _tokenVault = s.i_tokenVault[_loan.token];
 
         IERC20(_loan.token).safeTransferFrom(msg.sender, address(_tokenVault), _amount);
-        _tokenVault.repay(_amount);
+        _tokenVault.repay(_principalRepaid, _amount - _principalRepaid);
 
         LibProtocol._transferToken(_collateralToken, msg.sender, _amountToLiquidate);
 
@@ -82,6 +107,16 @@ library LibLiquidation {
         emit LoanRepayment(_loan.positionId, _loanId, _loan.token, _amount);
     }
 
+    /// @notice Liquidate a position's open-ended token debt, repaying `_amount` and
+    ///         seizing the equivalent (bonus-adjusted) collateral for the liquidator.
+    /// @dev Reverts if the position has no borrow for `_token`; applies the
+    ///      principal/interest split via `_repayStateChanges`, pulls the repayment
+    ///      into the vault, and transfers the seized collateral to `msg.sender`.
+    /// @param s The diamond storage layout.
+    /// @param _positionId The position being liquidated.
+    /// @param _amount The debt amount the liquidator repays.
+    /// @param _token The borrowed token being repaid.
+    /// @param _collateralToken The collateral token seized from the position.
     function _liquidatePosition(
         LibAppStorage.StorageLayout storage s,
         uint256 _positionId,
@@ -104,11 +139,11 @@ library LibLiquidation {
 
         RepayStateChangeParams memory _params =
             RepayStateChangeParams({positionId: _positionId, token: _token, amount: _amount});
-        s._repayStateChanges(_params);
+        uint256 _principalRepaid = s._repayStateChanges(_params);
 
         TokenVault _tokenVault = s.i_tokenVault[_token];
         IERC20(_token).safeTransferFrom(msg.sender, address(_tokenVault), _amount);
-        _tokenVault.repay(_amount);
+        _tokenVault.repay(_principalRepaid, _amount - _principalRepaid);
 
         LibProtocol._transferToken(_collateralToken, msg.sender, _amountToLiquidate);
 
@@ -116,6 +151,14 @@ library LibLiquidation {
         emit Repay(_positionId, _token, _amount);
     }
 
+    /// @notice Validate the preconditions for liquidating a position.
+    /// @dev Reverts unless the position is liquidatable, holds the named collateral,
+    ///      and the caller has approved/funded the repayment token amount.
+    /// @param s The diamond storage layout.
+    /// @param _positionId The position being liquidated.
+    /// @param _token The repayment token.
+    /// @param _collateralToken The collateral token to be seized.
+    /// @param _amount The repayment amount to validate allowance/balance for.
     function _liquidationCheck(
         LibAppStorage.StorageLayout storage s,
         uint256 _positionId,
@@ -129,6 +172,14 @@ library LibLiquidation {
         LibProtocol._allowanceAndBalanceCheck(_token, _amount);
     }
 
+    /// @notice Compute the amount of collateral token to seize for a given repayment.
+    /// @dev Converts the repaid debt's USD value into collateral units at the
+    ///      collateral price, then scales up by the token's liquidation bonus.
+    /// @param s The diamond storage layout.
+    /// @param _collateralToken The collateral token to seize.
+    /// @param _token The repaid (borrowed) token.
+    /// @param _amount The repayment amount in `_token` units.
+    /// @return The collateral amount to seize, including the liquidation bonus.
     function _getAmountToLiquidate(
         LibAppStorage.StorageLayout storage s,
         address _collateralToken,

@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.30;
+pragma solidity 0.8.30;
 
 import {LibAppStorage} from "./LibAppStorage.sol";
 import {LibDiamond} from "./LibDiamond.sol";
 import {ONLY_SECURITY_COUNCIL} from "../models/Error.sol";
 
+/// @title SecurityBase — Reentrancy guard and Security Council access-control modifiers backed by diamond storage
 abstract contract SecurityBase {
     uint256 private constant _NOT_ENTERED = 1;
     uint256 private constant _ENTERED = 2;
@@ -37,6 +38,7 @@ abstract contract SecurityBase {
         _;
     }
 
+    /// @notice Reverts with ONLY_SECURITY_COUNCIL unless the caller is the Diamond owner (Security Council).
     function _onlySecurityCouncil() internal view {
         if (msg.sender != LibDiamond.contractOwner()) revert ONLY_SECURITY_COUNCIL();
     }

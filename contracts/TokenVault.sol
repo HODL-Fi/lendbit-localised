@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity 0.8.30;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -31,8 +31,14 @@ contract TokenVault is ERC4626, ReentrancyGuard {
     error OnlyWETHContract();
 
     uint16 private interestRate;
+    /// @notice Protocol's share of interest, in bps, kept in sync with the
+    ///         token's `reserveFactor`. Interest accrues to LPs NET of this.
+    uint16 private reserveFactor;
     uint256 private totalBorrows;
+    /// @dev LP-claimable accrued interest (already NET of the reserve factor).
     uint256 private totalAccruedInterest;
+    /// @notice Protocol's realized interest reserve, claimable by the diamond.
+    uint256 public totalProtocolReserve;
     /// @dev purely historical metric, NOT used in valuation
     uint256 private totalBadDebt;
 
@@ -92,7 +98,14 @@ contract TokenVault is ERC4626, ReentrancyGuard {
      * @param _symbol Symbol of the vault token
      * @param _diamond Diamond contract address
      */
-    constructor(address _asset, string memory _name, string memory _symbol, address _diamond, uint16 _interestRate)
+    constructor(
+        address _asset,
+        string memory _name,
+        string memory _symbol,
+        address _diamond,
+        uint16 _interestRate,
+        uint16 _reserveFactor
+    )
         ERC4626(IERC20(_asset))
         ERC20(_name, _symbol)
         addressZeroCheck(_asset)
@@ -101,6 +114,7 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         diamond = _diamond;
         lastUpdateTimestamp = block.timestamp;
         interestRate = _interestRate;
+        reserveFactor = _reserveFactor;
     }
 
     /**
@@ -116,11 +130,16 @@ contract TokenVault is ERC4626, ReentrancyGuard {
      * @notice Get total assets managed by the vault
      * @return Total amount of underlying assets
      */
+    /// @dev Time-weighted accrual: LP share value grows smoothly as interest
+    ///      accrues on outstanding principal (so a late depositor only earns
+    ///      interest accrued after they join). `totalAccruedInterest` and the
+    ///      pending bucket are NET of the reserve factor; the protocol's realized
+    ///      reserve is excluded.
     function totalAssets() public view override returns (uint256) {
         uint256 _interest = _pendingInterest();
         uint256 _balance = IERC20(asset()).balanceOf(address(this));
 
-        return _balance + totalBorrows + totalAccruedInterest + _interest;
+        return _balance + totalBorrows + totalAccruedInterest + _interest - totalProtocolReserve;
     }
 
     /**
@@ -183,13 +202,18 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         // Check if owner has enough shares
         if (balanceOf(owner) < shares) revert InsufficientShares();
 
-        // Check allowance if not owner
-        if (msg.sender != owner) {
+        // Check allowance if a third party is spending the owner's shares. The
+        // diamond is exempt: `withdraw` is `onlyDiamond`, and the diamond's
+        // `_withdraw` already pins `owner` to the calling depositor, so it never
+        // moves another user's shares — a separate user→diamond share approval
+        // would otherwise be required and the deposit flow never grants it (#7).
+        if (msg.sender != owner && msg.sender != diamond) {
             _spendAllowance(owner, msg.sender, shares);
         }
 
+        // only the non-reserve liquid balance is withdrawable by LPs
         uint256 _balance = IERC20(asset()).balanceOf(address(this));
-        if (_balance < assets) {
+        if (_balance - totalProtocolReserve < assets) {
             revert InsufficientBalance();
         }
 
@@ -203,6 +227,35 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         return shares;
     }
 
+    /// @dev The inherited ERC4626 `mint`/`redeem` are gated behind `onlyDiamond`
+    ///      so that ALL vault entry/exit flows through the diamond's accounting
+    ///      (`config.totalDeposits`, position/pause/reserve checks). Otherwise a
+    ///      shareholder could `redeem` directly and desync that accounting (#3).
+    /// @notice Mint an exact number of shares to a receiver, pulling the
+    ///         corresponding assets from the caller via the inherited ERC4626 flow.
+    /// @param shares Amount of shares to mint.
+    /// @param receiver Address receiving the minted shares.
+    /// @return Amount of assets deposited for the minted shares.
+    function mint(uint256 shares, address receiver) public override onlyDiamond returns (uint256) {
+        return super.mint(shares, receiver);
+    }
+
+    /// @notice Burn an exact number of shares from an owner and return the
+    ///         corresponding assets to the receiver via the inherited ERC4626 flow.
+    /// @param shares Amount of shares to burn.
+    /// @param receiver Address receiving the redeemed assets.
+    /// @param owner Owner of the shares being burned.
+    /// @return Amount of assets returned for the redeemed shares.
+    function redeem(uint256 shares, address receiver, address owner) public override onlyDiamond returns (uint256) {
+        return super.redeem(shares, receiver, owner);
+    }
+
+    /// @notice Lend assets out of the vault to a borrower (only diamond).
+    /// @dev Accrues interest, increases `totalBorrows` by `amount`, and transfers
+    ///      `amount` of the underlying asset out — reverting if the non-reserve
+    ///      liquid balance is insufficient.
+    /// @param receiver Address receiving the borrowed assets.
+    /// @param amount Principal amount to lend out.
     function borrow(address receiver, uint256 amount) external onlyDiamond {
         // accrue interest into non-compounding bucket
         _accrueInterest();
@@ -210,8 +263,8 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         // increase principal borrows (non-compounding)
         totalBorrows = totalBorrows + amount;
 
-        // ensure vault has liquidity to lend
-        if (IERC20(asset()).balanceOf(address(this)) < amount) revert InsufficientBalance();
+        // only the non-reserve liquid balance can be lent out
+        if (IERC20(asset()).balanceOf(address(this)) - totalProtocolReserve < amount) revert InsufficientBalance();
 
         // transfer funds out
         IERC20(asset()).safeTransfer(receiver, amount);
@@ -219,30 +272,34 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         emit Borrow(_msgSender(), amount);
     }
 
-    function repay(uint256 amount) external onlyDiamond validAmount(amount) {
-        // accrue interest into non-compounding bucket
+    /// @notice Book a repayment, split by the diamond into principal and interest.
+    /// @dev `principalRepaid` reduces outstanding principal; the interest is split
+    ///      by the reserve factor — the LP share realizes the smoothly-accrued
+    ///      receivable (keeping totalAssets continuous), the protocol share lands
+    ///      in the claimable reserve. The diamond has already transferred the full
+    ///      principal + interest into the vault.
+    /// @param principalRepaid Principal portion of the repayment.
+    /// @param interestPaid    Interest (incl. penalty) portion of the repayment.
+    function repay(uint256 principalRepaid, uint256 interestPaid) external onlyDiamond {
         _accrueInterest();
 
-        // apply repayment to principal first, then to accrued interest
-        if (amount >= totalBorrows) {
-            amount = amount - totalBorrows;
+        if (principalRepaid >= totalBorrows) {
             totalBorrows = 0;
         } else {
-            totalBorrows = totalBorrows - amount;
-            amount = 0;
+            totalBorrows = totalBorrows - principalRepaid;
         }
 
-        if (amount > 0) {
-            if (amount >= totalAccruedInterest) {
-                amount = amount - totalAccruedInterest;
-                totalAccruedInterest = 0;
-            } else {
-                totalAccruedInterest = totalAccruedInterest - amount;
-                amount = 0;
-            }
-        }
+        uint256 _reserve = (interestPaid * reserveFactor) / Constants.BASIS_POINTS_SCALE_256;
+        uint256 _lpInterest = interestPaid - _reserve;
 
-        emit Repay(_msgSender(), amount);
+        if (_lpInterest >= totalAccruedInterest) {
+            totalAccruedInterest = 0;
+        } else {
+            totalAccruedInterest = totalAccruedInterest - _lpInterest;
+        }
+        totalProtocolReserve = totalProtocolReserve + _reserve;
+
+        emit Repay(_msgSender(), principalRepaid + interestPaid);
     }
 
     /**
@@ -269,12 +326,57 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         _burn(owner, shares);
     }
 
+    /// @notice Keep the vault's accrual rate in sync with the protocol's rate.
+    /// @dev The diamond pushes its current rate so depositor accrual tracks what
+    ///      borrowers actually pay (the fix for the frozen-rate decoupling). Bound
+    ///      is the diamond's responsibility; accrue first so the change is applied
+    ///      only going forward.
+    /// @param rate New annual interest rate, in basis points.
     function setInterestRate(uint16 rate) external onlyDiamond {
-        if (rate > Constants.BASIS_POINTS_SCALE) revert InvalidRate(); // max 100% interest rate
         _accrueInterest();
         interestRate = rate;
+        emit InterestRateSet(rate);
     }
 
+    /// @notice Keep the vault's reserve factor in sync with the token config.
+    /// @dev Accrues interest before the change so the new factor applies only going
+    ///      forward. Reverts if `_reserveFactor` exceeds the basis-point scale.
+    /// @param _reserveFactor New protocol reserve factor, in basis points.
+    function setReserveFactor(uint16 _reserveFactor) external onlyDiamond {
+        if (_reserveFactor > Constants.BASIS_POINTS_SCALE) revert InvalidRate();
+        _accrueInterest();
+        reserveFactor = _reserveFactor;
+        emit ReserveFactorSet(_reserveFactor);
+    }
+
+    /// @notice Transfer realized protocol reserve out of the vault (only diamond).
+    /// @param to Address receiving the withdrawn reserve.
+    /// @param amount Amount of reserve to withdraw; reverts if it exceeds `totalProtocolReserve`.
+    function withdrawReserve(address to, uint256 amount)
+        external
+        onlyDiamond
+        addressZeroCheck(to)
+        validAmount(amount)
+    {
+        if (amount > totalProtocolReserve) revert InvalidAmount();
+        totalProtocolReserve = totalProtocolReserve - amount;
+        IERC20(asset()).safeTransfer(to, amount);
+        emit ReserveWithdrawn(to, amount);
+    }
+
+    /// @notice The protocol's currently-claimable interest reserve.
+    /// @return The current `totalProtocolReserve` value.
+    function protocolReserve() external view returns (uint256) {
+        return totalProtocolReserve;
+    }
+
+    /// @notice Record bad debt and write it off the vault's borrow base (only diamond).
+    /// @dev Accrues interest, then writes off `amount` first against `totalBorrows`
+    ///      (principal) and any remainder against `totalAccruedInterest`, which
+    ///      lowers `totalAssets` and the share price. `totalBadDebt` tracks the
+    ///      cumulative written-off amount. Reverts if `amount` exceeds outstanding
+    ///      principal plus accrued interest.
+    /// @param amount Bad-debt amount to write off.
     function updateBadDebt(uint256 amount) external onlyDiamond validAmount(amount) {
         // accrue interest before updating bad debt
         _accrueInterest();
@@ -318,23 +420,26 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         uint256 timeElapsed = block.timestamp - lastUpdateTimestamp;
         if (timeElapsed == 0) return;
 
-        uint256 interest =
-            (totalBorrows * interestRate * timeElapsed) / (Constants.BASIS_POINTS_SCALE_256 * Constants.ONE_YEAR);
-
-        if (interest > 0) {
-            totalAccruedInterest += interest;
+        uint256 lpInterest = _pendingInterest();
+        if (lpInterest > 0) {
+            totalAccruedInterest += lpInterest;
         }
 
         lastUpdateTimestamp = block.timestamp;
     }
 
+    /// @dev LP's share of the interest accrued since the last update (net of the
+    ///      reserve factor). The protocol's slice is realized into the reserve at
+    ///      repayment, keeping totalAssets smooth across a repayment.
     function _pendingInterest() internal view returns (uint256) {
         uint256 _timeElapsed = block.timestamp - lastUpdateTimestamp;
-        uint256 _interest =
+        uint256 _gross =
             (totalBorrows * interestRate * _timeElapsed) / (Constants.BASIS_POINTS_SCALE_256 * Constants.ONE_YEAR);
-        return _interest;
+        return (_gross * (Constants.BASIS_POINTS_SCALE_256 - reserveFactor)) / Constants.BASIS_POINTS_SCALE_256;
     }
 
+    /// @notice The vault's outstanding principal borrows (excludes accrued interest).
+    /// @return The current `totalBorrows` value.
     function totalBorrow() external view returns (uint256) {
         return totalBorrows;
     }
@@ -345,4 +450,7 @@ contract TokenVault is ERC4626, ReentrancyGuard {
     event BadDebtUpdated(uint256 amount, uint256 totalBadDebt);
     event Borrow(address indexed to, uint256 amount);
     event Repay(address indexed from, uint256 amount);
+    event ReserveWithdrawn(address indexed to, uint256 amount);
+    event InterestRateSet(uint16 rate);
+    event ReserveFactorSet(uint16 reserveFactor);
 }

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.30;
+pragma solidity 0.8.30;
 
+// Error — File-level custom errors shared across the protocol's facets and libraries
+// Grouped by domain: position/access, token support, borrow requests, lending, yield, and Chainlink Functions.
 error ADDRESS_ZERO();
 error ADDRESS_EXISTS(address userAddress);
 error NO_POSITION_ID(address userAddress);
@@ -11,6 +13,7 @@ error SUBSCRIPTION_ID_NOT_SET();
 
 error TOKEN_NOT_SUPPORTED(address asset);
 error TOKEN_ALREADY_SUPPORTED(address asset, address assetVault);
+error VAULT_NOT_EMPTY(uint256 shares, uint256 totalBorrows);
 error TOKEN_ALREADY_SUPPORTED_AS_COLLATERAL(address asset);
 error TOKEN_NOT_SUPPORTED_AS_COLLATERAL(address asset);
 
@@ -19,6 +22,7 @@ error REQUEST_BORROW_INVALID_SIGNATURE(address recovered);
 error REQUEST_BORROW_NONCE_USED(address wallet, uint256 nonce);
 error REQUEST_BORROW_TARGET_CHAIN_MISMATCH(uint256 expected, uint256 provided);
 error REQUEST_BORROW_CONTRACT_MISMATCH(address expected, address provided);
+error REQUEST_BORROW_EXPIRED(uint256 deadline, uint256 timestamp);
 
 error AMOUNT_ZERO();
 error BAD_RATE();
@@ -38,6 +42,7 @@ error TENURE_TOO_SHORT();
 error LTV_BELOW_TEN_PERCENT();
 error TOKEN_OVERUTILIZATION();
 error NO_OUTSTANDING_DEBT(uint256 positionId, address token);
+error REPAYMENT_BELOW_INTEREST(uint256 amount, uint256 interestDue);
 error INACTIVE_LOAN();
 
 error EMPTY_STRING();

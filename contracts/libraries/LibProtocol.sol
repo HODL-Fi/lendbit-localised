@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.30;
+pragma solidity 0.8.30;
 
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -7,7 +7,6 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 import {LibAppStorage} from "./LibAppStorage.sol";
-import {LibInterestRateModel} from "./LibInterestRateModel.sol";
 import {LibPositionManager} from "./LibPositionManager.sol";
 import {LibPriceOracle} from "./LibPriceOracle.sol";
 import {LibVaultManager} from "./LibVaultManager.sol";
@@ -21,6 +20,7 @@ import {RepayStateChangeParams} from "../models/FunctionParams.sol";
 
 import {TokenVault} from "../TokenVault.sol";
 
+/// @title LibProtocol — core lending logic for collateral, borrowing, and repayment
 library LibProtocol {
     using LibPositionManager for LibAppStorage.StorageLayout;
     using LibPriceOracle for LibAppStorage.StorageLayout;
@@ -28,6 +28,13 @@ library LibProtocol {
 
     using SafeERC20 for IERC20;
 
+    /// @notice Deposit collateral for the caller's position, creating a position if
+    ///         none exists, and rebalance it into the yield strategy.
+    /// @dev Credits the amount ACTUALLY received via balance-diff (fee-on-transfer
+    ///      safe); native token is taken via `msg.value`.
+    /// @param s The diamond storage layout.
+    /// @param _token Collateral token to deposit (or the native token sentinel).
+    /// @param _amount Amount of collateral to deposit.
     function _depositCollateral(LibAppStorage.StorageLayout storage s, address _token, uint256 _amount) internal {
         _validateAmount(_token, _amount);
         _callerWhitelisted(s);
@@ -53,6 +60,12 @@ library LibProtocol {
         emit CollateralDeposited(_positionId, _token, _creditedAmount);
     }
 
+    /// @notice Withdraw collateral from the caller's position, reverting if it would
+    ///         drop the position's health factor below the minimum while debt is open.
+    /// @dev Rebalances out of the yield strategy before transferring the token out.
+    /// @param s The diamond storage layout.
+    /// @param _token Collateral token to withdraw.
+    /// @param _amount Amount of collateral to withdraw.
     function _withdrawCollateral(LibAppStorage.StorageLayout storage s, address _token, uint256 _amount) internal {
         uint256 _positionId = _positionIdCheck(s);
         if (s.s_positionCollateral[_positionId][_token] < _amount) revert INSUFFICIENT_BALANCE();
@@ -71,6 +84,15 @@ library LibProtocol {
         emit CollateralWithdrawn(_positionId, _token, _amount);
     }
 
+    /// @notice Open a fixed-term loan against the caller's position and disburse the
+    ///         principal from the token's vault to the caller.
+    /// @dev Validates token support, minimum tenure, vault utilization, and the
+    ///      post-borrow health factor; records the loan and bumps vault borrows.
+    /// @param s The diamond storage layout.
+    /// @param _token Token to borrow.
+    /// @param _principal Principal amount to borrow.
+    /// @param _tenureSeconds Loan tenure in seconds (must be at least one day).
+    /// @return The new loan's id.
     function _takeLoan(
         LibAppStorage.StorageLayout storage s,
         address _token,
@@ -113,6 +135,15 @@ library LibProtocol {
         return _loanId;
     }
 
+    /// @notice Open a fixed-term loan on behalf of a wallet from a signed,
+    ///         cross-chain-attested borrow request, disbursing principal to that wallet.
+    /// @dev Validates request fields, target chain/contract, optional deadline,
+    ///      utilization, the off-chain signer's signature, and single-use nonce
+    ///      before recording the loan.
+    /// @param s The diamond storage layout.
+    /// @param _request The borrow request (position, token, amount, tenure, chain, nonce, deadline, wallet).
+    /// @param _signature The signer's signature over the request fields.
+    /// @return The new loan's id.
     function _requestBorrow(
         LibAppStorage.StorageLayout storage s,
         BorrowRequest calldata _request,
@@ -135,6 +166,12 @@ library LibProtocol {
         }
         if (_request.contractAddress != address(this)) {
             revert REQUEST_BORROW_CONTRACT_MISMATCH(address(this), _request.contractAddress);
+        }
+
+        // Optional signature expiry: a zero deadline means no expiry; a non-zero
+        // deadline bounds how long a spoke-chain-attested request stays valid on the hub.
+        if (_request.deadline != 0 && block.timestamp > _request.deadline) {
+            revert REQUEST_BORROW_EXPIRED(_request.deadline, block.timestamp);
         }
 
         if (!s._validateVaultUtlization(_request.token, _request.amount)) revert TOKEN_OVERUTILIZATION();
@@ -173,6 +210,12 @@ library LibProtocol {
         return _loanId;
     }
 
+    /// @notice Verify that a borrow request was signed by the configured request signer.
+    /// @dev Reconstructs the EIP-191 message hash over the request fields and reverts
+    ///      unless the recovered address matches `s_requestBorrowSigner`.
+    /// @param s The diamond storage layout.
+    /// @param _request The borrow request whose fields are hashed.
+    /// @param _signature The signature to recover and check.
     function _verifyBorrowSignature(
         LibAppStorage.StorageLayout storage s,
         BorrowRequest calldata _request,
@@ -193,7 +236,8 @@ library LibProtocol {
                 _request.targetChainId,
                 _request.nonce,
                 _request.contractAddress,
-                _request.wallet
+                _request.wallet,
+                _request.deadline
             )
         );
         bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
@@ -204,6 +248,16 @@ library LibProtocol {
         }
     }
 
+    /// @notice Repay a fixed-term loan for a position using interest-first allocation.
+    /// @dev Clamps `_amount` to the outstanding balance, requires it to at least
+    ///      cover accrued interest + penalty, reduces principal by the principal
+    ///      portion only, closes the loan when principal hits zero, and forwards the
+    ///      payment to the vault split into principal and interest.
+    /// @param s The diamond storage layout.
+    /// @param _positionId The position that owns the loan.
+    /// @param _loanId The loan to repay.
+    /// @param _amount Repayment amount (clamped to outstanding debt).
+    /// @return The loan's remaining principal after repayment.
     function _repayLoanFor(LibAppStorage.StorageLayout storage s, uint256 _positionId, uint256 _loanId, uint256 _amount)
         internal
         returns (uint256)
@@ -213,7 +267,7 @@ library LibProtocol {
         if (_loan.positionId != _positionId) revert NOT_LOAN_OWNER(_positionId);
         if (_loan.status != LoanStatus.FULFILLED) revert INACTIVE_LOAN();
 
-        uint256 _loanDebt = _outstandingBalance(_loan, block.timestamp);
+        uint256 _loanDebt = _outstandingBalance(s, _loanId, block.timestamp);
         if (_loanDebt == 0) revert NO_OUTSTANDING_DEBT(_positionId, _loan.token);
 
         _allowanceAndBalanceCheck(_loan.token, _amount);
@@ -224,9 +278,21 @@ library LibProtocol {
 
         uint256 _oldPrincipal = _loan.principal;
 
-        // Update loan repaid amount
+        // interest-first allocation: cover interest + penalty before any principal,
+        // and reduce principal by the principal portion ONLY — never fold interest
+        // into principal (which would re-accrue as compound interest: #12).
+        uint256 _interestDue = _loanDebt - _oldPrincipal;
+
+        // A repayment must at least cover the accrued interest + penalty. This
+        // stops a dust repayment from resetting the interest anchor (escaping
+        // accrued interest) — the maturity/penalty clock is already pinned to the
+        // immutable origination time, so neither can be reset by a token payment (#6).
+        if (_amount < _interestDue) revert REPAYMENT_BELOW_INTEREST(_amount, _interestDue);
+
+        uint256 _principalRepaid = _amount - _interestDue;
+
         _loan.repaid += _amount;
-        _loan.principal = _loanDebt - _amount;
+        _loan.principal = _oldPrincipal - _principalRepaid;
         _loan.startTimestamp = block.timestamp;
 
         // If fully repaid, update loan status and move to closed loans
@@ -239,15 +305,19 @@ library LibProtocol {
         TokenVault _vault = s.i_tokenVault[_loan.token];
         IERC20(_loan.token).safeTransferFrom(msg.sender, address(_vault), _amount);
 
-        uint256 _principalRepaid = _amount > _oldPrincipal ? _oldPrincipal : _amount;
         s._updateVaultRepays(_loan.token, _principalRepaid);
-
-        _vault.repay(_amount);
+        _vault.repay(_principalRepaid, _amount - _principalRepaid);
 
         emit LoanRepayment(_positionId, _loanId, _loan.token, _amount);
         return _loan.principal;
     }
 
+    /// @notice Repay a fixed-term loan owned by the caller's position.
+    /// @dev Resolves the caller's position id, then delegates to `_repayLoanFor`.
+    /// @param s The diamond storage layout.
+    /// @param _loanId The loan to repay.
+    /// @param _amount Repayment amount (clamped to outstanding debt).
+    /// @return The loan's remaining principal after repayment.
     function _repayLoan(LibAppStorage.StorageLayout storage s, uint256 _loanId, uint256 _amount)
         internal
         returns (uint256)
@@ -256,6 +326,15 @@ library LibProtocol {
         return _repayLoanFor(s, _positionId, _loanId, _amount);
     }
 
+    /// @notice Borrow a token against the caller's position under an open-ended,
+    ///         interest-accruing debt and disburse it from the token's vault.
+    /// @dev Validates token support, utilization, and the post-borrow health factor;
+    ///      capitalizes prior accrued interest into the stored debt while tracking
+    ///      principal separately so the borrow tally moves by principal only.
+    /// @param s The diamond storage layout.
+    /// @param _token Token to borrow.
+    /// @param _amount Amount to borrow.
+    /// @return The position's updated total debt for the token (principal + interest).
     function _borrow(LibAppStorage.StorageLayout storage s, address _token, uint256 _amount)
         internal
         returns (uint256)
@@ -278,8 +357,12 @@ library LibProtocol {
 
         s.s_positionBorrowedLastUpdate[_positionId][_token] = block.timestamp;
 
-        uint256 capitalizedInterest = _calculateUserDebt(s, _positionId, _token, 0) - _tokenBorrow;
-        s._updateVaultBorrows(_token, capitalizedInterest);
+        // Track principal separately and raise the borrow tally by principal only
+        // (NOT capitalized interest), so it can be decremented symmetrically by
+        // principal on repay. This keeps config.totalBorrows == outstanding
+        // principal, which utilization / the borrow cap / interest pricing read.
+        s.s_positionPrincipal[_positionId][_token] += _amount;
+        s._updateVaultBorrows(_token, _amount);
 
         TokenVault _vault = s.i_tokenVault[_token];
         _vault.borrow(msg.sender, _amount);
@@ -288,6 +371,14 @@ library LibProtocol {
         return s.s_positionBorrowed[_positionId][_token];
     }
 
+    /// @notice Repay open-ended token debt for the caller's position.
+    /// @dev Computes the interest-inclusive debt, clamps `_amount` to it, applies the
+    ///      principal/interest split via `_repayStateChanges`, and forwards the
+    ///      payment to the vault.
+    /// @param s The diamond storage layout.
+    /// @param _token Token whose debt is being repaid.
+    /// @param _amount Repayment amount (clamped to outstanding debt).
+    /// @return The position's remaining debt for the token after repayment.
     function _repay(LibAppStorage.StorageLayout storage s, address _token, uint256 _amount) internal returns (uint256) {
         uint256 _positionId = _positionIdCheck(s);
 
@@ -302,23 +393,41 @@ library LibProtocol {
 
         RepayStateChangeParams memory _params =
             RepayStateChangeParams({positionId: _positionId, token: _token, amount: _amount});
-        _repayStateChanges(s, _params);
+        uint256 _principalRepaid = _repayStateChanges(s, _params);
         TokenVault _vault = s.i_tokenVault[_token];
-        _vault.repay(_amount);
 
         IERC20(_token).safeTransferFrom(msg.sender, address(_vault), _amount);
+        _vault.repay(_principalRepaid, _amount - _principalRepaid);
 
         emit Repay(_positionId, _token, _amount);
         return _calculateUserDebt(s, _positionId, _token, 0);
     }
 
-    function _repayStateChanges(LibAppStorage.StorageLayout storage s, RepayStateChangeParams memory _params) internal {
+    /// @notice Apply the storage updates for an open-ended repayment and report the
+    ///         principal portion repaid.
+    /// @dev Reduces stored debt by the full `_params.amount`, but decrements the
+    ///      principal tally (and vault borrows) by the principal portion only.
+    /// @param s The diamond storage layout.
+    /// @param _params Position id, token, and repayment amount.
+    /// @return _principalRepaid The principal portion of the repayment.
+    function _repayStateChanges(LibAppStorage.StorageLayout storage s, RepayStateChangeParams memory _params)
+        internal
+        returns (uint256 _principalRepaid)
+    {
         uint256 _totalDebt = _calculateUserDebt(s, _params.positionId, _params.token, 0);
         s.s_positionBorrowed[_params.positionId][_params.token] = _totalDebt - _params.amount;
         s.s_positionBorrowedLastUpdate[_params.positionId][_params.token] = block.timestamp;
-        s._updateVaultRepays(_params.token, _params.amount);
+
+        // Decrement the borrow tally by the principal portion only — the interest
+        // portion of the repayment was never added to the tally at origination.
+        uint256 _principalOutstanding = s.s_positionPrincipal[_params.positionId][_params.token];
+        _principalRepaid = _params.amount > _principalOutstanding ? _principalOutstanding : _params.amount;
+        s.s_positionPrincipal[_params.positionId][_params.token] = _principalOutstanding - _principalRepaid;
+        s._updateVaultRepays(_params.token, _principalRepaid);
     }
 
+    /// @dev Protocol's reserve slice of an interest repayment, per the token's
+    ///      `reserveFactor`. Applied to all interest, including penalty.
     function _allowanceAndBalanceCheck(address _token, uint256 _amount) internal view {
         if (_token == address(0)) revert ADDRESS_ZERO();
         if (_amount == 0) revert AMOUNT_ZERO();
@@ -341,6 +450,12 @@ library LibProtocol {
         if (!s.isWhitelisted[msg.sender]) revert ADDRESS_NOT_WHITELISTED(msg.sender);
     }
 
+    /// @notice Register a new supported collateral token with its price feed and LTV.
+    /// @dev Reverts on zero addresses, an LTV below 10%, or a token already supported.
+    /// @param s The diamond storage layout.
+    /// @param _token Collateral token to add.
+    /// @param _pricefeed Price feed for the token.
+    /// @param _tokenLTV Loan-to-value ratio in basis points (minimum 1000 = 10%).
     function _addCollateralToken(
         LibAppStorage.StorageLayout storage s,
         address _token,
@@ -361,6 +476,10 @@ library LibProtocol {
         emit CollateralTokenLTVUpdated(_token, 0, _tokenLTV);
     }
 
+    /// @notice Remove a token from the supported collateral set.
+    /// @dev Flips support off and swap-removes the token from the collateral list.
+    /// @param s The diamond storage layout.
+    /// @param _token Collateral token to remove.
     function _removeCollateralToken(LibAppStorage.StorageLayout storage s, address _token) internal {
         if (_token == address(0)) revert ADDRESS_ZERO();
         if (!s.s_supportedCollateralTokens[_token]) revert TOKEN_NOT_SUPPORTED_AS_COLLATERAL(_token);
@@ -381,18 +500,37 @@ library LibProtocol {
         emit CollateralTokenRemoved(_token);
     }
 
+    /// @notice Set the protocol interest and penalty rates and propagate the interest
+    ///         rate to every token vault so LP accrual tracks borrower pricing.
+    /// @dev Reverts if either rate is zero.
+    /// @param s The diamond storage layout.
+    /// @param _newInterestRate New annual interest rate, in basis points.
+    /// @param _newPenaltyRate New penalty rate, in basis points.
     function _setInterestRate(LibAppStorage.StorageLayout storage s, uint16 _newInterestRate, uint16 _newPenaltyRate)
         internal
     {
         if (_newInterestRate == 0) revert AMOUNT_ZERO();
         if (_newPenaltyRate == 0) revert AMOUNT_ZERO();
-        if (_newInterestRate > Constants.MAX_APR_BASIS_POINTS) revert BAD_RATE();
-        if (_newPenaltyRate > Constants.MAX_APR_BASIS_POINTS) revert BAD_RATE();
         s.s_interestRate = _newInterestRate;
         s.s_penaltyRate = _newPenaltyRate;
+
+        // Keep every vault's accrual rate in sync with the protocol rate, so
+        // depositor accrual tracks what borrowers actually pay (#4 — no frozen,
+        // decoupled rate).
+        address[] memory _tokens = s.s_allSupportedTokens;
+        for (uint256 i; i < _tokens.length; ++i) {
+            TokenVault _vault = s.i_tokenVault[_tokens[i]];
+            if (address(_vault) != address(0)) _vault.setInterestRate(_newInterestRate);
+        }
+
         emit InterestRateUpdated(_newInterestRate, _newPenaltyRate);
     }
 
+    /// @notice Update the loan-to-value ratio for a supported collateral token.
+    /// @dev Reverts on a zero token, an LTV below 10%, or an unsupported token.
+    /// @param s The diamond storage layout.
+    /// @param _token Collateral token to update.
+    /// @param _tokenNewLTV New loan-to-value ratio in basis points (minimum 1000).
     function _setCollateralTokenLtv(LibAppStorage.StorageLayout storage s, address _token, uint16 _tokenNewLTV)
         internal
     {
@@ -424,6 +562,10 @@ library LibProtocol {
         }
     }
 
+    /// @notice Total USD value of all collateral held by a position (no LTV haircut).
+    /// @param s The diamond storage layout.
+    /// @param _positionId The position to value.
+    /// @return The summed USD value across every supported collateral token.
     function _getPositionCollateralValue(LibAppStorage.StorageLayout storage s, uint256 _positionId)
         internal
         view
@@ -439,6 +581,12 @@ library LibProtocol {
         return _totalValue;
     }
 
+    /// @notice Remaining USD value a position can still borrow against.
+    /// @dev LTV-weighted collateral value minus current open + active-loan debt,
+    ///      floored at zero.
+    /// @param s The diamond storage layout.
+    /// @param _positionId The position to evaluate.
+    /// @return The borrowable USD headroom for the position.
     function _getPositionBorrowableCollateralValue(LibAppStorage.StorageLayout storage s, uint256 _positionId)
         internal
         view
@@ -452,6 +600,11 @@ library LibProtocol {
         return _totalValue - _debt;
     }
 
+    /// @notice LTV-weighted USD value of a position's collateral (the borrowing base).
+    /// @dev Each collateral's USD value is scaled by its per-token LTV.
+    /// @param s The diamond storage layout.
+    /// @param _positionId The position to evaluate.
+    /// @return The LTV-weighted collateral value.
     function _getPositionUtilizableCollateralValue(LibAppStorage.StorageLayout storage s, uint256 _positionId)
         internal
         view
@@ -478,6 +631,11 @@ library LibProtocol {
         return _usdValue;
     }
 
+    /// @notice Total USD value of a position's open-ended (non-fixed-term) debt
+    ///         across all supported tokens, including accrued interest.
+    /// @param s The diamond storage layout.
+    /// @param _positionId The position to evaluate.
+    /// @return The summed USD debt value.
     function _getPositionBorrowedValue(LibAppStorage.StorageLayout storage s, uint256 _positionId)
         internal
         view
@@ -494,6 +652,15 @@ library LibProtocol {
         return _totalValue;
     }
 
+    /// @notice Compute a position's health factor, optionally including a prospective
+    ///         additional borrow.
+    /// @dev Returns LTV-weighted collateral × PRECISION / total debt (open + active +
+    ///      `_currentBorrowValue`); returns the max (collateral × PRECISION) when there
+    ///      is no debt.
+    /// @param s The diamond storage layout.
+    /// @param _positionId The position to evaluate.
+    /// @param _currentBorrowValue Prospective extra borrow value in USD (0 to ignore).
+    /// @return The health factor scaled by 1e18.
     function _getHealthFactor(LibAppStorage.StorageLayout storage s, uint256 _positionId, uint256 _currentBorrowValue)
         internal
         view
@@ -524,18 +691,26 @@ library LibProtocol {
     ) internal view returns (uint256 debt) {
         uint256 _tokenBorrows = s.s_positionBorrowed[_positionId][_token];
 
-        VaultConfiguration memory _config = s.s_tokenVaultConfig[_token];
         uint256 _from = s.s_positionBorrowedLastUpdate[_positionId][_token];
-
         uint256 _timeElapsed = block.timestamp - _from;
-        uint256 utilization = LibInterestRateModel.calculateUtilization(_config.totalBorrows, _config.totalDeposits);
-        uint256 interestRate = LibInterestRateModel.calculateInterestRate(_config, utilization);
+
+        // Fixed APR (#11): price interest at the protocol-set rate over the actual
+        // elapsed time. Pricing off live utilization let a same-block utilization
+        // spike retroactively reprice a borrower's whole interval and force a
+        // wrongful liquidation; the fixed rate removes that manipulable input and
+        // keeps borrower debt coupled to the vault's (same-rate) LP accrual.
+        uint256 interestRate = s.s_interestRate;
         uint256 factor = ((interestRate * _timeElapsed) * 1e18) / (10000 * 365 days);
         debt = _amount + _tokenBorrows + ((_tokenBorrows * factor) / 1e18);
 
         return debt;
     }
 
+    /// @notice Total USD value of a position's active fixed-term loans, including
+    ///         accrued interest and any penalty.
+    /// @param s The diamond storage layout.
+    /// @param _positionId The position to evaluate.
+    /// @return The summed USD value of all active loans' outstanding balances.
     function _totalActiveDebt(LibAppStorage.StorageLayout storage s, uint256 _positionId)
         internal
         view
@@ -546,27 +721,46 @@ library LibProtocol {
         uint256[] memory _ids = s.s_positionActiveLoanIds[_positionId];
         for (uint256 i = 0; i < _ids.length; i++) {
             Loan memory _loan = s.s_loans[_ids[i]];
-            (, uint256 _debt) = s._getTokenValueInUSD(_loan.token, _outstandingBalance(_loan, block.timestamp));
+            (, uint256 _debt) = s._getTokenValueInUSD(_loan.token, _outstandingBalance(s, _ids[i], block.timestamp));
             _totalDebt += _debt;
         }
         return _totalDebt;
     }
 
-    function _outstandingBalance(Loan memory _loan, uint256 _timestamp) internal pure returns (uint256) {
+    /// @notice Compute a fixed-term loan's outstanding balance (principal + accrued
+    ///         interest, plus a post-maturity penalty) at a given timestamp.
+    /// @dev Returns 0 for any non-FULFILLED loan. Base interest accrues from the
+    ///      resettable anchor up to maturity only; the penalty accrues against the
+    ///      fixed maturity.
+    /// @param _loan The loan to value.
+    /// @param _originationTime The IMMUTABLE loan origination timestamp. Maturity
+    ///        (and therefore the penalty window) is measured against this, so a
+    ///        partial repayment that resets the interest anchor `startTimestamp`
+    ///        cannot move the maturity / penalty clock (#6).
+    /// @param _timestamp The timestamp at which to value the loan.
+    /// @return The total amount owed at `_timestamp`.
+    function _outstandingBalance(Loan memory _loan, uint256 _originationTime, uint256 _timestamp)
+        internal
+        pure
+        returns (uint256)
+    {
         if (_loan.status != LoanStatus.FULFILLED) return 0;
 
-        uint256 _timeElapsed = _timestamp - _loan.startTimestamp;
-        if (_timeElapsed > _loan.tenureSeconds) {
-            _timeElapsed = _loan.tenureSeconds;
-        }
+        uint256 _maturity = _originationTime + _loan.tenureSeconds;
 
-        uint256 _interest = (_loan.principal * _loan.annualRateBps * _timeElapsed)
+        // Base interest accrues from the (resettable) interest anchor up to
+        // maturity — never past it, regardless of how many times it is reset.
+        uint256 _interestEnd = _timestamp < _maturity ? _timestamp : _maturity;
+        uint256 _interestElapsed = _interestEnd > _loan.startTimestamp ? _interestEnd - _loan.startTimestamp : 0;
+
+        uint256 _interest = (_loan.principal * _loan.annualRateBps * _interestElapsed)
             / (Constants.BASIS_POINTS_SCALE_256 * Constants.ONE_YEAR);
         uint256 _totalOwed = _loan.principal + _interest;
 
-        if (_timestamp > (_loan.startTimestamp + _loan.tenureSeconds)) {
-            uint256 penaltyTime = _timestamp - (_loan.startTimestamp + _loan.tenureSeconds);
-            uint256 penalty = (_totalOwed * (_loan.annualRateBps + _loan.penaltyRateBps) * penaltyTime)
+        // Penalty accrues against the fixed maturity, not the moving anchor.
+        if (_timestamp > _maturity) {
+            uint256 penaltyTime = _timestamp - _maturity;
+            uint256 penalty = (_totalOwed * (uint256(_loan.annualRateBps) + _loan.penaltyRateBps) * penaltyTime)
                 / (Constants.BASIS_POINTS_SCALE_256 * Constants.ONE_YEAR);
             _totalOwed += penalty;
         }
@@ -574,13 +768,21 @@ library LibProtocol {
         return _totalOwed;
     }
 
+    /// @notice Compute a stored loan's outstanding balance at a given timestamp.
+    /// @dev Resolves the immutable origination time (`s_loanStartTime`, falling back
+    ///      to the loan's `startTimestamp`) and delegates to the pure overload.
+    /// @param s The diamond storage layout.
+    /// @param _loanId The loan to value.
+    /// @param _timestamp The timestamp at which to value the loan.
+    /// @return The total amount owed at `_timestamp`.
     function _outstandingBalance(LibAppStorage.StorageLayout storage s, uint256 _loanId, uint256 _timestamp)
         internal
         view
         returns (uint256)
     {
         Loan memory _loan = s.s_loans[_loanId];
-        return _outstandingBalance(_loan, _timestamp);
+        uint256 _origination = s.s_loanStartTime[_loanId] == 0 ? _loan.startTimestamp : s.s_loanStartTime[_loanId];
+        return _outstandingBalance(_loan, _origination, _timestamp);
     }
 
     function _transferToken(address _token, address _to, uint256 _amount) internal {
@@ -603,6 +805,10 @@ library LibProtocol {
         }
     }
 
+    /// @notice List the active loan ids for a position.
+    /// @param s The diamond storage layout.
+    /// @param _positionId The position to query.
+    /// @return The position's active loan ids.
     function _getUserActiveLoanIds(LibAppStorage.StorageLayout storage s, uint256 _positionId)
         internal
         view
@@ -611,6 +817,9 @@ library LibProtocol {
         return s.s_positionActiveLoanIds[_positionId];
     }
 
+    /// @notice List every loan id across the protocol whose status is FULFILLED.
+    /// @param s The diamond storage layout.
+    /// @return The ids of all currently active loans.
     function _getActiveLoanIds(LibAppStorage.StorageLayout storage s) internal view returns (uint256[] memory) {
         uint256 totalLoans = s.s_nextLoanId;
         uint256 count = 0;
@@ -634,6 +843,21 @@ library LibProtocol {
         return activeLoanIds;
     }
 
+    /// @notice Return the full details of a loan, including its current outstanding debt.
+    /// @dev `principal` and `startTimestamp` fall back to the immutable `s_loanPrincipal`
+    ///      / `s_loanStartTime` records when the live loan fields have been mutated.
+    /// @param s The diamond storage layout.
+    /// @param _loanId The loan to read.
+    /// @return positionId The owning position id.
+    /// @return token The borrowed token.
+    /// @return principal The loan principal (original if the live value is zero).
+    /// @return repaid The cumulative amount repaid.
+    /// @return tenureSeconds The loan tenure in seconds.
+    /// @return startTimestamp The immutable origination timestamp.
+    /// @return debt The current outstanding balance at `block.timestamp`.
+    /// @return annualRateBps The annual interest rate in basis points.
+    /// @return penaltyRateBps The penalty rate in basis points.
+    /// @return status The loan status as a uint8.
     function _getLoanDetails(LibAppStorage.StorageLayout storage s, uint256 _loanId)
         internal
         view
@@ -658,7 +882,7 @@ library LibProtocol {
             loan.repaid,
             loan.tenureSeconds,
             s.s_loanStartTime[_loanId] == 0 ? loan.startTimestamp : s.s_loanStartTime[_loanId],
-            _outstandingBalance(loan, block.timestamp),
+            _outstandingBalance(s, _loanId, block.timestamp),
             loan.annualRateBps,
             loan.penaltyRateBps,
             uint8(loan.status)

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.30;
+pragma solidity 0.8.30;
 
 /// @dev A mock that implements getReserveAToken but always returns a wrong address.
 ///      Used to test the POOL_TOKEN_MISMATCH revert path in LibYieldStrategy._configureYieldToken.
