@@ -73,11 +73,15 @@ leads (interest-rate divide-by-zero, utilization double-count).
 
 These are intentional and are **not** bugs:
 
-- **Cross-chain borrow health check (audit #5).** `_requestBorrow` performs no
-  on-chain collateral/health check on the hub. Collateral lives on the spoke chain;
-  the health check runs there at attestation time and is carried by the signed
-  request (`_verifyBorrowSignature` against `s_requestBorrowSigner`). The hub has
-  nothing to measure. An optional signed `deadline` was added as defence-in-depth.
+- **Cross-chain borrow health check (audit #5 / 2026-07-01 #1).** `_requestBorrow`
+  performs no on-chain collateral/health check on the hub. Cross-chain borrows are
+  **spoke-collateralized**: the collateral lives on the spoke chain, the health check
+  runs there at attestation time, and the result is carried by the signed request
+  (`_verifyBorrowSignature` against `s_requestBorrowSigner`). The hub holds no
+  collateral for these positions, so a hub-side `_getHealthFactor` would read zero
+  collateral and revert every legitimate request — it is intentionally omitted. An
+  optional signed `deadline` was added as defence-in-depth. The **minimum tenure**
+  (`ONE_DAY`) IS now enforced on `_requestBorrow`, matching `_takeLoan`.
 - **Fixed APR re-prices open positions on a governance rate change.** `s_interestRate`
   is a single set-once-style rate; changing it re-prices the full elapsed interval of
   open pooled borrows. Acceptable for a fixed-rate deployment; removing it would

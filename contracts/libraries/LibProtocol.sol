@@ -174,6 +174,13 @@ library LibProtocol {
             revert REQUEST_BORROW_EXPIRED(_request.deadline, block.timestamp);
         }
 
+        // Enforce the same minimum tenure as `_takeLoan`. (No hub-side health check
+        // here by design: cross-chain borrows are backed by spoke-chain collateral
+        // attested by the trusted signer, so the hub holds no collateral to measure
+        // — a hub health check would revert every legitimate request. See
+        // KNOWN_ISSUES.md §2.)
+        if (_request.tenureSeconds < Constants.ONE_DAY) revert TENURE_TOO_SHORT();
+
         if (!s._validateVaultUtlization(_request.token, _request.amount)) revert TOKEN_OVERUTILIZATION();
 
         _verifyBorrowSignature(s, _request, _signature);

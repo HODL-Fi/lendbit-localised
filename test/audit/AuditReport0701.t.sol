@@ -4,6 +4,7 @@ pragma solidity ^0.8.30;
 import {Base} from "../Base.t.sol";
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {BorrowRequest} from "../../contracts/models/Protocol.sol";
+import {TENURE_TOO_SHORT} from "../../contracts/models/Error.sol";
 
 /// @notice PoCs for the 2026-07-01 review findings that were NOT already covered
 ///         by the 2026-06-26 remediations.
@@ -86,6 +87,37 @@ contract AuditReport0701Test is Base {
         (,,,,, uint256 startTsAfter,,,,) = gettersF.getLoanDetails(loanId);
         assertEq(startTsAfter, origination, "origination anchor is immutable across partial repay");
         assertLt(origination + tenure, block.timestamp, "loan is still past its fixed maturity");
+    }
+
+    // ------------------------------------------------------------------
+    // #1 (partial) — Request-borrow enforces the same minimum tenure as
+    //      _takeLoan. The hub-side health check is intentionally omitted:
+    //      cross-chain borrows are spoke-collateralized (KNOWN_ISSUES §2).
+    // ------------------------------------------------------------------
+    function test_requestBorrow_rejects_short_tenure() public {
+        createVaultAndFund(1_000_000e18);
+        uint256 positionId = depositCollateralFor(user1, address(token1), 10_000e18);
+
+        uint256 signerPk = 0xA11CE;
+        positionManagerF.setRequestBorrowSigner(vm.addr(signerPk));
+
+        BorrowRequest memory request = BorrowRequest({
+            action: "BORROW_REQUEST",
+            positionId: positionId,
+            token: address(token4),
+            amount: 100e6,
+            tenureSeconds: 1 hours, // below ONE_DAY
+            sourceChainId: block.chainid,
+            targetChainId: block.chainid,
+            nonce: 1,
+            contractAddress: address(protocolF),
+            wallet: user1,
+            deadline: 0
+        });
+
+        vm.prank(user1);
+        vm.expectRevert(TENURE_TOO_SHORT.selector);
+        protocolF.requestBorrow(request, _sign(signerPk, request));
     }
 
     // ------------------------------------------------------------------
