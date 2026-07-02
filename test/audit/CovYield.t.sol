@@ -124,9 +124,18 @@ contract CovYieldTest is Base {
     }
 
     function test_SetPause_RevertNotCouncil() public {
+        // Pausing is now guardian-or-council; a non-privileged caller reverts NOT_GUARDIAN.
+        vm.prank(nonAdmin);
+        vm.expectRevert(abi.encodeWithSignature("NOT_GUARDIAN(address)", nonAdmin));
+        yieldStrategyF.setYieldPause(address(token1), true);
+    }
+
+    function test_SetPause_Unpause_RevertNotCouncil() public {
+        // Un-pausing stays council-only.
+        yieldStrategyF.setYieldPause(address(token1), true);
         vm.prank(nonAdmin);
         vm.expectRevert(abi.encodeWithSignature("ONLY_SECURITY_COUNCIL()"));
-        yieldStrategyF.setYieldPause(address(token1), true);
+        yieldStrategyF.setYieldPause(address(token1), false);
     }
 
     function test_SetPause_PauseThenUnpause() public {

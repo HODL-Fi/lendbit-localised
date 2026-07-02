@@ -5,7 +5,7 @@ import {LibAppStorage} from "../libraries/LibAppStorage.sol";
 import {LibPositionManager} from "../libraries/LibPositionManager.sol";
 import {LibDiamond} from "../libraries/LibDiamond.sol";
 
-import {UNAUTHORIZED_POSITION_CREATION} from "../models/Error.sol";
+import {UNAUTHORIZED_POSITION_CREATION, NOT_WHITELISTER} from "../models/Error.sol";
 import {SecurityBase} from "../libraries/SecurityBase.sol";
 
 /// @title PositionManagerFacet — position creation, ownership transfer, and whitelist administration
@@ -62,16 +62,41 @@ contract PositionManagerFacet is SecurityBase {
         return _positionId;
     }
 
-    /// @notice Add an address to the whitelist, permitting it to create positions and interact with the protocol (only security council).
+    /// @notice Add an address to the whitelist, permitting it to interact with the protocol.
+    /// @dev Callable by the security council OR a delegated whitelister (e.g. an
+    ///      automated onboarding backend). Whitelisting only grants access — it cannot
+    ///      move funds — so it is safe to delegate to a hot key. Blacklisting is NOT
+    ///      delegated (see `blacklistAddress`).
     /// @param _user The address to whitelist
-    function whitelistAddress(address _user) external onlySecurityCouncil {
-        LibPositionManager._whitelistAddress(LibAppStorage.appStorage(), _user);
+    function whitelistAddress(address _user) external {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        if (msg.sender != LibDiamond.contractOwner() && !s.s_isWhitelister[msg.sender]) {
+            revert NOT_WHITELISTER(msg.sender);
+        }
+        LibPositionManager._whitelistAddress(s, _user);
     }
 
     /// @notice Remove an address from the whitelist (only security council).
+    /// @dev NOT delegated to whitelisters: a blacklist freezes the user's deposits,
+    ///      borrows, collateral, yield claims, and vault withdrawals, so its blast
+    ///      radius is kept off any automated hot key.
     /// @param _user The address to blacklist
     function blacklistAddress(address _user) external onlySecurityCouncil {
         LibPositionManager._blacklistAddress(LibAppStorage.appStorage(), _user);
+    }
+
+    /// @notice Grant or revoke the delegated whitelister capability (only security council).
+    /// @param _user The address whose whitelister status is set
+    /// @param _status True to grant, false to revoke
+    function setWhitelister(address _user, bool _status) external onlySecurityCouncil {
+        LibPositionManager._setWhitelister(LibAppStorage.appStorage(), _user, _status);
+    }
+
+    /// @notice Return whether an address holds the delegated whitelister capability.
+    /// @param _user The address to check
+    /// @return True if the address is a whitelister
+    function isWhitelister(address _user) external view returns (bool) {
+        return LibPositionManager._isWhitelister(LibAppStorage.appStorage(), _user);
     }
 
     /// @notice Set the trusted signer whose signature authorizes cross-chain borrow requests (only security council).

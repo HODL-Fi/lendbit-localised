@@ -47,6 +47,8 @@ error COLLATERAL_STILL_IN_USE(address token);
 error LTV_BELOW_TEN_PERCENT();
 error LTV_ABOVE_LIQUIDATION_THRESHOLD(uint16 ltv, uint16 threshold);
 error UNAUTHORIZED_POSITION_CREATION(address caller);
+error NOT_WHITELISTER(address caller);
+error NOT_GUARDIAN(address caller);
 error TOKEN_OVERUTILIZATION();
 error NO_OUTSTANDING_DEBT(uint256 positionId, address token);
 error REPAYMENT_BELOW_INTEREST(uint256 amount, uint256 interestDue);

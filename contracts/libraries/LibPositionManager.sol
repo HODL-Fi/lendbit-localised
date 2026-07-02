@@ -121,6 +121,19 @@ library LibPositionManager {
         s.isWhitelisted[_user] = false;
     }
 
+    /// @notice Grants or revokes the delegated whitelister capability for `_user`.
+    /// @dev Council-gated at the facet. A whitelister may ADD users to the whitelist
+    ///      (automated onboarding) but not blacklist — blacklisting stays council-only.
+    function _setWhitelister(LibAppStorage.StorageLayout storage s, address _user, bool _status) internal {
+        s.s_isWhitelister[_user] = _status;
+        emit WhitelisterSet(_user, _status);
+    }
+
+    /// @notice Returns true if `_user` holds the delegated whitelister capability.
+    function _isWhitelister(LibAppStorage.StorageLayout storage s, address _user) internal view returns (bool) {
+        return s.s_isWhitelister[_user];
+    }
+
     /// @notice Returns true if `_user` already owns a position.
     function _userAddressExists(LibAppStorage.StorageLayout storage s, address _user) internal view returns (bool) {
         if (s.s_ownerPosition[_user] == 0) {

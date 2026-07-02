@@ -117,8 +117,9 @@ contract VaultManagerTest is Base {
         address _token = address(0x123);
         vaultManagerF.deployVault(_token, address(0xdead), "Test token", "TesT", defaultConfig);
 
+        // Pausing is now guardian-or-council; a non-privileged caller reverts NOT_GUARDIAN.
         vm.startPrank(linkHolder);
-        vm.expectRevert(abi.encodeWithSelector(ONLY_SECURITY_COUNCIL.selector));
+        vm.expectRevert(abi.encodeWithSelector(NOT_GUARDIAN.selector, linkHolder));
         vaultManagerF.pauseTokenSupport(_token);
     }
 

@@ -101,6 +101,23 @@ library LibAppStorage {
         // current flat-90%-of-raw behaviour until governance tunes a token.
         // Appended at the end for upgrade-safe layout.
         mapping(address => uint16) s_collateralLiquidationThreshold;
+        // Delegated whitelister allowlist. An address here may add users to the
+        // `isWhitelisted` onboarding set (e.g. an automated KYC/onboarding backend)
+        // WITHOUT holding the full security-council key. Blacklisting stays
+        // council-only by design: a blacklist freezes deposits, borrows, collateral,
+        // yield claims, AND vault withdrawals, so its blast radius is kept off any
+        // automated hot key. Kept separate from `s_isKeeper` (the price-refresh
+        // capability) and additive to the council. Appended at the end for
+        // upgrade-safe layout.
+        mapping(address => bool) s_isWhitelister;
+        // Delegated guardian allowlist. A guardian may PAUSE markets / vaults / yield
+        // (emergency fail-safe — the lowest-blast-radius admin action, and exits stay
+        // open) WITHOUT holding the council key, so an automated monitor can freeze a
+        // misbehaving market fast. UNPAUSE / resume is deliberately NOT delegated
+        // (stays council-only), the classic asymmetric pause pattern — a compromised
+        // guardian can grief but can never turn protection back off. Appended at the
+        // end for upgrade-safe layout.
+        mapping(address => bool) s_isGuardian;
     }
 
     bytes32 internal constant STORAGE_SLOT = keccak256("contracts.storage.LibAppStorage");

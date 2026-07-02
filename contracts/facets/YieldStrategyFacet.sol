@@ -32,10 +32,17 @@ contract YieldStrategyFacet is SecurityBase {
         );
     }
 
-    /// @notice Pause or resume an enabled token's yield strategy (only security council); reverts if yield is not enabled for the token.
+    /// @notice Pause or resume an enabled token's yield strategy; reverts if yield is not enabled for the token.
+    /// @dev Pausing (`_paused == true`) is allowed for guardians or the council;
+    ///      un-pausing (`_paused == false`) is council-only.
     /// @param _token The token whose strategy to pause or resume
     /// @param _paused True to pause, false to resume
-    function setYieldPause(address _token, bool _paused) external onlySecurityCouncil {
+    function setYieldPause(address _token, bool _paused) external {
+        if (_paused) {
+            _onlyGuardianOrCouncil();
+        } else {
+            _onlySecurityCouncil();
+        }
         LibYieldStrategy._setYieldPause(LibAppStorage.appStorage(), _token, _paused);
     }
 

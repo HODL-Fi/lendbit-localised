@@ -5,6 +5,9 @@ libs = ['lib']
 ffi = true
 viaIR = true
 solc = '0.8.30'
+# 'cancun' is required: OpenZeppelin v5.5.0 (Memory.sol / Bytes.sol) uses MCOPY with
+# no pre-Cancun fallback. Both targets support Cancun today — Base (OP-stack Ecotone)
+# and BNB Chain (Tycho/Cancun upgrade, 2024) — so this is safe cross-chain.
 evm_version = 'cancun'
 optimizer = true
 optimizer_runs = 1000
@@ -18,11 +21,21 @@ remappings = [
     'openzeppelin-contracts/=lib/openzeppelin-contracts/',
 ]
 
-# Contract verification — set the API key via env (e.g. ETHERSCAN_API_KEY) and
-# pass `--verify` to `forge create`/`forge script`. Override `chain`/`url` per network.
+# RPC endpoints (URLs supplied via env). Select with `--rpc-url base_sepolia` etc.
+[rpc_endpoints]
+base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
+bsc_testnet = "${BSC_TESTNET_RPC_URL}"
+base = "${BASE_RPC_URL}"
+bsc = "${BSC_RPC_URL}"
+
+# Contract verification — set the API keys via env and pass `--verify`.
 [etherscan]
 mainnet = { key = "${ETHERSCAN_API_KEY}" }
 sepolia = { key = "${ETHERSCAN_API_KEY}", chain = 11155111 }
+base_sepolia = { key = "${BASESCAN_API_KEY}", chain = 84532, url = "https://api-sepolia.basescan.org/api" }
+base = { key = "${BASESCAN_API_KEY}", chain = 8453, url = "https://api.basescan.org/api" }
+bsc_testnet = { key = "${BSCSCAN_API_KEY}", chain = 97, url = "https://api-testnet.bscscan.com/api" }
+bsc = { key = "${BSCSCAN_API_KEY}", chain = 56, url = "https://api.bscscan.com/api" }
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
 [lint]

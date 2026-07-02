@@ -6,6 +6,7 @@ import {LibVaultManager} from "../libraries/LibVaultManager.sol";
 import {LibDiamond} from "../libraries/LibDiamond.sol";
 
 import {VaultConfiguration} from "../models/Protocol.sol";
+import {GuardianSet} from "../models/Event.sol";
 import {SecurityBase} from "../libraries/SecurityBase.sol";
 
 /// @title VaultManagerFacet — LP deposit/withdraw and security-council vault administration
@@ -102,9 +103,11 @@ contract VaultManagerFacet is SecurityBase {
         LibVaultManager._setLiquidationBonus(s, _token, _liquidationBonus);
     }
 
-    /// @notice Mark a token as unsupported so it can no longer be deposited or borrowed (only security council); reverts if the token is not currently supported.
+    /// @notice Mark a token as unsupported so it can no longer be deposited or borrowed (guardian or security council); reverts if the token is not currently supported.
+    /// @dev Pausing is delegated to guardians for fast emergency response; resuming
+    ///      stays council-only.
     /// @param _token The token to pause support for
-    function pauseTokenSupport(address _token) external onlySecurityCouncil {
+    function pauseTokenSupport(address _token) external onlyGuardianOrCouncil {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         s._pauseTokenSupport(_token);
     }
@@ -163,9 +166,32 @@ contract VaultManagerFacet is SecurityBase {
         s._writeOffBadDebt(_token, _amount);
     }
 
-    /// @notice Emergency-pause or resume a token vault's deposits (council only).
-    function setVaultPaused(address _token, bool _paused) external onlySecurityCouncil {
+    /// @notice Emergency-pause or resume a token vault's deposits.
+    /// @dev Pausing (`_paused == true`) is allowed for guardians or the council;
+    ///      un-pausing (`_paused == false`) is council-only, so a guardian can never
+    ///      turn protection back off.
+    function setVaultPaused(address _token, bool _paused) external {
+        if (_paused) {
+            _onlyGuardianOrCouncil();
+        } else {
+            _onlySecurityCouncil();
+        }
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         s._setVaultPaused(_token, _paused);
+    }
+
+    /// @notice Grant or revoke the delegated guardian (pause-only) capability (only security council).
+    /// @param _guardian The address whose guardian status is set
+    /// @param _status True to grant, false to revoke
+    function setGuardian(address _guardian, bool _status) external onlySecurityCouncil {
+        LibAppStorage.appStorage().s_isGuardian[_guardian] = _status;
+        emit GuardianSet(_guardian, _status);
+    }
+
+    /// @notice Return whether an address holds the delegated guardian capability.
+    /// @param _guardian The address to check
+    /// @return True if the address is a guardian
+    function isGuardian(address _guardian) external view returns (bool) {
+        return LibAppStorage.appStorage().s_isGuardian[_guardian];
     }
 }

@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import {LibAppStorage} from "./LibAppStorage.sol";
 import {LibDiamond} from "./LibDiamond.sol";
-import {ONLY_SECURITY_COUNCIL} from "../models/Error.sol";
+import {ONLY_SECURITY_COUNCIL, NOT_GUARDIAN} from "../models/Error.sol";
 
 /// @title SecurityBase — Reentrancy guard and Security Council access-control modifiers backed by diamond storage
 abstract contract SecurityBase {
@@ -41,5 +41,19 @@ abstract contract SecurityBase {
     /// @notice Reverts with ONLY_SECURITY_COUNCIL unless the caller is the Diamond owner (Security Council).
     function _onlySecurityCouncil() internal view {
         if (msg.sender != LibDiamond.contractOwner()) revert ONLY_SECURITY_COUNCIL();
+    }
+
+    /// @dev Restricts access to a delegated guardian OR the Diamond owner. Used for
+    ///      PAUSE-direction actions only; unpause/resume keep `onlySecurityCouncil`.
+    modifier onlyGuardianOrCouncil() {
+        _onlyGuardianOrCouncil();
+        _;
+    }
+
+    /// @notice Reverts with NOT_GUARDIAN unless the caller is a guardian or the owner.
+    function _onlyGuardianOrCouncil() internal view {
+        if (msg.sender != LibDiamond.contractOwner() && !LibAppStorage.appStorage().s_isGuardian[msg.sender]) {
+            revert NOT_GUARDIAN(msg.sender);
+        }
     }
 }

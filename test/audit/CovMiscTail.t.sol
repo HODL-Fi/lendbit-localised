@@ -185,9 +185,10 @@ contract CovMiscTailTest is Base {
     // ----------------------------------------------------------------------
 
     function test_securityBase_onlySecurityCouncil_reverts() public {
+        // Un-pause direction is council-only (pause is guardian-or-council).
         vm.prank(nonAdmin);
         vm.expectRevert(ONLY_SECURITY_COUNCIL.selector);
-        vaultManagerF.setVaultPaused(address(token1), true);
+        vaultManagerF.setVaultPaused(address(token1), false);
     }
 
     // ----------------------------------------------------------------------

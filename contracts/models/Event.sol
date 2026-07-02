@@ -79,6 +79,10 @@ event FunctionsSourceChanged(address indexed securityCouncil, bytes source);
 
 event KeeperSet(address indexed keeper, bool status);
 
+event WhitelisterSet(address indexed whitelister, bool status);
+
+event GuardianSet(address indexed guardian, bool status);
+
 event CollateralLiquidationThresholdSet(address indexed token, uint16 oldThreshold, uint16 newThreshold);
 
 // Vault risk/rate parameter updates
