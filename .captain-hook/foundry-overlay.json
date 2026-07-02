@@ -1,8 +1,0 @@
-{
-  "mode": "native",
-  "generator": "none",
-  "solc": "",
-  "deps_installed": false,
-  "files_written": [],
-  "note": "foundry.toml already present — no overlay needed"
-}
