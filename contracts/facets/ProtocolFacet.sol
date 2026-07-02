@@ -129,4 +129,14 @@ contract ProtocolFacet is SecurityBase {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
         s._setCollateralTokenLtv(_token, _tokenNewLTV);
     }
+
+    /// @notice Set a collateral token's liquidation threshold (only security council).
+    /// @dev Must be >= the token's LTV and <= 100% (10000 bps). Defaults to 90% at
+    ///      onboarding, so leaving it unset preserves the flat-90% behaviour.
+    /// @param _token The collateral token to configure
+    /// @param _threshold The new liquidation threshold in basis points
+    function setCollateralLiquidationThreshold(address _token, uint16 _threshold) external onlySecurityCouncil {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        s._setCollateralLiquidationThreshold(_token, _threshold);
+    }
 }

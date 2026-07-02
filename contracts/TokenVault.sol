@@ -36,6 +36,17 @@ contract TokenVault is ERC4626, ReentrancyGuard {
     ///         token's `reserveFactor`. Interest accrues to LPs NET of this.
     uint16 private reserveFactor;
     uint256 private totalBorrows;
+    /// @notice Portion of `totalBorrows` owed by fixed-term loans. Invariant:
+    ///         `fixedBorrows <= totalBorrows`. The floating (pooled) principal is
+    ///         `totalBorrows - fixedBorrows`.
+    uint256 private fixedBorrows;
+    /// @notice Sum of `principal * annualRateBps` across all outstanding fixed
+    ///         loans. Fixed loans accrue at each loan's immutable snapshotted rate,
+    ///         NOT the mutable vault `interestRate`, so a governance rate change can
+    ///         no longer mint phantom interest on fixed principal that early LPs
+    ///         could extract (#9). `_pendingInterest` derives fixed accrual straight
+    ///         from this product, so accrual stays smooth and rate-correct.
+    uint256 private fixedRateProduct;
     /// @dev LP-claimable accrued interest (already NET of the reserve factor).
     uint256 private totalAccruedInterest;
     /// @notice Protocol's realized interest reserve, claimable by the diamond.
@@ -269,11 +280,31 @@ contract TokenVault is ERC4626, ReentrancyGuard {
     /// @param receiver Address receiving the borrowed assets.
     /// @param amount Principal amount to lend out.
     function borrow(address receiver, uint256 amount) external onlyDiamond {
+        _doBorrow(receiver, amount, 0);
+    }
+
+    /// @notice Lend assets out for a fixed-term loan carrying an immutable rate (only diamond).
+    /// @dev Tags the principal as `fixedBorrows` and records `amount * rate` so the
+    ///      loan accrues at its own snapshotted rate, insulating it from later
+    ///      changes to the mutable vault `interestRate` (#9).
+    /// @param receiver Address receiving the borrowed assets.
+    /// @param amount Principal amount to lend out.
+    /// @param rate The loan's fixed annual rate in basis points.
+    function borrowFixed(address receiver, uint256 amount, uint16 rate) external onlyDiamond {
+        _doBorrow(receiver, amount, rate);
+    }
+
+    /// @param fixedRate Non-zero for a fixed-term loan (its snapshotted bps rate); zero for a pooled/floating borrow.
+    function _doBorrow(address receiver, uint256 amount, uint16 fixedRate) internal {
         // accrue interest into non-compounding bucket
         _accrueInterest();
 
         // increase principal borrows (non-compounding)
         totalBorrows = totalBorrows + amount;
+        if (fixedRate != 0) {
+            fixedBorrows = fixedBorrows + amount;
+            fixedRateProduct = fixedRateProduct + (amount * fixedRate);
+        }
 
         // only the non-reserve liquid balance can be lent out
         if (IERC20(asset()).balanceOf(address(this)) - totalProtocolReserve < amount) revert InsufficientBalance();
@@ -293,6 +324,22 @@ contract TokenVault is ERC4626, ReentrancyGuard {
     /// @param principalRepaid Principal portion of the repayment.
     /// @param interestPaid    Interest (incl. penalty) portion of the repayment.
     function repay(uint256 principalRepaid, uint256 interestPaid) external onlyDiamond {
+        _doRepay(principalRepaid, interestPaid, 0);
+    }
+
+    /// @notice Book a fixed-term loan repayment (only diamond).
+    /// @dev Mirror of `repay` for principal tagged as `fixedBorrows`. Removes the
+    ///      loan's `principal * rate` contribution from `fixedRateProduct` so the
+    ///      remaining fixed accrual reflects only the still-outstanding fixed loans.
+    /// @param principalRepaid Principal portion of the repayment.
+    /// @param interestPaid    Interest (incl. penalty) portion of the repayment.
+    /// @param rate            The loan's fixed annual rate in basis points.
+    function repayFixed(uint256 principalRepaid, uint256 interestPaid, uint16 rate) external onlyDiamond {
+        _doRepay(principalRepaid, interestPaid, rate);
+    }
+
+    /// @param fixedRate Non-zero for a fixed-term loan (its snapshotted bps rate); zero for a pooled/floating repay.
+    function _doRepay(uint256 principalRepaid, uint256 interestPaid, uint16 fixedRate) internal {
         _accrueInterest();
 
         if (principalRepaid >= totalBorrows) {
@@ -301,13 +348,30 @@ contract TokenVault is ERC4626, ReentrancyGuard {
             totalBorrows = totalBorrows - principalRepaid;
         }
 
+        if (fixedRate != 0) {
+            uint256 _productReduction = principalRepaid * fixedRate;
+            if (principalRepaid >= fixedBorrows) {
+                fixedBorrows = 0;
+                fixedRateProduct = 0;
+            } else {
+                fixedBorrows = fixedBorrows - principalRepaid;
+                fixedRateProduct =
+                    _productReduction >= fixedRateProduct ? 0 : fixedRateProduct - _productReduction;
+            }
+        }
+
         uint256 _reserve = (interestPaid * reserveFactor) / Constants.BASIS_POINTS_SCALE_256;
         uint256 _lpInterest = interestPaid - _reserve;
 
-        if (_lpInterest >= totalAccruedInterest) {
-            totalAccruedInterest = 0;
-        } else {
-            totalAccruedInterest = totalAccruedInterest - _lpInterest;
+        {
+            // Both floating and fixed interest are accrued smoothly as a receivable
+            // (fixed via `fixedRateProduct`), so realizing a repayment as cash means
+            // removing the receivable to keep `totalAssets` continuous.
+            if (_lpInterest >= totalAccruedInterest) {
+                totalAccruedInterest = 0;
+            } else {
+                totalAccruedInterest = totalAccruedInterest - _lpInterest;
+            }
         }
         totalProtocolReserve = totalProtocolReserve + _reserve;
 
@@ -415,6 +479,14 @@ contract TokenVault is ERC4626, ReentrancyGuard {
             totalBorrows = totalBorrows - _remainingBadDebt;
             _remainingBadDebt = 0;
         }
+        // Keep the invariant fixedBorrows <= totalBorrows after writing off
+        // principal (the written-off debt may have been a fixed loan). Scale the
+        // rate product down in proportion so the blended fixed rate is preserved.
+        if (fixedBorrows > totalBorrows) {
+            uint256 _newFixed = totalBorrows;
+            fixedRateProduct = fixedBorrows == 0 ? 0 : (fixedRateProduct * _newFixed) / fixedBorrows;
+            fixedBorrows = _newFixed;
+        }
 
         // Write off remaining bad debt from accrued interest
         if (_remainingBadDebt > 0) {
@@ -445,8 +517,17 @@ contract TokenVault is ERC4626, ReentrancyGuard {
     ///      repayment, keeping totalAssets smooth across a repayment.
     function _pendingInterest() internal view returns (uint256) {
         uint256 _timeElapsed = block.timestamp - lastUpdateTimestamp;
-        uint256 _gross =
-            (totalBorrows * interestRate * _timeElapsed) / (Constants.BASIS_POINTS_SCALE_256 * Constants.ONE_YEAR);
+        // Floating (pooled) principal accrues at the mutable vault rate; fixed
+        // principal accrues at its own snapshotted blended rate (`fixedRateProduct`
+        // = Σ principal·rate). Keeping fixed accrual off the mutable rate is what
+        // stops a governance rate change from minting phantom interest on fixed
+        // loans that early LPs could extract (#9). When the rate is unchanged the
+        // two formulas coincide, so accrual stays identical to the single-rate case.
+        // Defensive: never underflow if the fixed/total buckets momentarily
+        // diverge — `totalAssets()` depends on this view and must never revert.
+        uint256 _floatingBorrows = totalBorrows > fixedBorrows ? totalBorrows - fixedBorrows : 0;
+        uint256 _rateProduct = (_floatingBorrows * interestRate) + fixedRateProduct;
+        uint256 _gross = (_rateProduct * _timeElapsed) / (Constants.BASIS_POINTS_SCALE_256 * Constants.ONE_YEAR);
         return (_gross * (Constants.BASIS_POINTS_SCALE_256 - reserveFactor)) / Constants.BASIS_POINTS_SCALE_256;
     }
 

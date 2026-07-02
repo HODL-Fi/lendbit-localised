@@ -100,6 +100,15 @@ contract GettersFacet {
         return s.s_collateralTokenLTV[_token];
     }
 
+    /// @notice Return the effective liquidation threshold for a collateral token.
+    /// @dev Falls back to the protocol default (90%) when unset.
+    /// @param _token The collateral token
+    /// @return The token's liquidation threshold in basis points
+    function getCollateralLiquidationThreshold(address _token) external view returns (uint16) {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        return s._getCollateralLiquidationThreshold(_token);
+    }
+
     /// @notice Return the protocol's current interest rate and penalty rate.
     /// @return The annual interest rate in basis points
     /// @return The penalty rate in basis points

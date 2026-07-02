@@ -34,6 +34,10 @@ library LibVaultManager {
     {
         if (_token == address(0)) revert ADDRESS_ZERO();
         if (_amount == 0) revert AMOUNT_ZERO();
+        // Honour the whitelist on every deposit, not just when creating a new
+        // position — otherwise a user blacklisted after opening a position could
+        // still mint vault shares (#8). Mirrors `_depositCollateral`.
+        s._addressIsWhitelisted(_from);
         if (!s.s_supportedToken[_token]) revert TOKEN_NOT_SUPPORTED(_token);
         uint256 _positionId = s._getPositionIdForUser(_from);
         if (_positionId == 0) {
@@ -53,12 +57,19 @@ library LibVaultManager {
         _tokenI.safeTransferFrom(_from, address(this), _amount);
         uint256 _received = _tokenI.balanceOf(address(this)) - _before;
 
-        _config.totalDeposits += _received;
-
+        // Credit utilization accounting from what the VAULT actually receives on
+        // the second hop, not the diamond's first-hop receipt. For a fee-on-
+        // transfer token the vault gets less than `_received`, so crediting the
+        // first-hop amount would overstate `totalDeposits` and inflate the borrow
+        // cap above real liquid assets (#4).
         _tokenI.forceApprove(address(_tokenVault), _received);
+        uint256 _vaultBefore = _tokenI.balanceOf(address(_tokenVault));
         shares = _tokenVault.deposit(_received, _from);
+        uint256 _vaultReceived = _tokenI.balanceOf(address(_tokenVault)) - _vaultBefore;
 
-        emit Deposit(_positionId, _token, _received);
+        _config.totalDeposits += _vaultReceived;
+
+        emit Deposit(_positionId, _token, _vaultReceived);
     }
 
     /// @notice Withdraw assets from a token's vault to a user, burning their shares.
@@ -72,13 +83,26 @@ library LibVaultManager {
     function _withdraw(LibAppStorage.StorageLayout storage s, address _to, address _token, uint256 _amount) internal {
         if (_token == address(0)) revert ADDRESS_ZERO();
         if (_amount == 0) revert AMOUNT_ZERO();
-        if (!s.s_supportedToken[_token]) revert TOKEN_NOT_SUPPORTED(_token);
+        // Honour the whitelist/blacklist freeze on this value-extracting path, like
+        // deposit, collateral withdrawal, and yield claim already do. Otherwise a
+        // user blacklisted after depositing could still burn shares and pull vault
+        // assets — the LP-withdrawal twin of the deposit-side blacklist gap (report
+        // 2026-07-02 18:17 #1). This is the USER freeze; it is orthogonal to (and
+        // composes with) the token-support-pause exit path below.
+        s._addressIsWhitelisted(_to);
+        // Deliberately NOT gated on `s_supportedToken`. Pausing/delisting a token
+        // (`_pauseTokenSupport`) must stop new deposits and borrows, but it must not
+        // trap existing LPs — a withdrawal only returns their own deposited principal
+        // and reduces protocol exposure, so it stays available even while support is
+        // paused (see lead: pausing token support blocks LP withdrawals). A token
+        // that never had a vault still reverts here on the zero-vault check; that
+        // check runs before the position lookup so an un-vaulted token surfaces
+        // TOKEN_NOT_SUPPORTED rather than NO_POSITION_ID.
+        TokenVault _tokenVault = s.i_tokenVault[_token];
+        if (address(_tokenVault) == address(0)) revert TOKEN_NOT_SUPPORTED(_token);
 
         uint256 _positionId = s._getPositionIdForUser(_to);
         if (_positionId == 0) revert NO_POSITION_ID(_to);
-
-        TokenVault _tokenVault = s.i_tokenVault[_token];
-        if (address(_tokenVault) == address(0)) revert TOKEN_NOT_SUPPORTED(_token);
 
         VaultConfiguration storage _config = s.s_tokenVaultConfig[_token];
 
@@ -131,6 +155,8 @@ library LibVaultManager {
         if (_outstandingShares != 0 || _outstandingBorrows != 0) {
             revert VAULT_NOT_EMPTY(_outstandingShares, _outstandingBorrows);
         }
+        // Same config bounds as `_deployVault` (#7).
+        _validateVaultConfigBounds(_config);
 
         TokenVault _tokenVault =
             new TokenVault(_token, _oldVault.name(), _oldVault.symbol(), address(this), s.s_interestRate, _config.reserveFactor);
@@ -175,6 +201,11 @@ library LibVaultManager {
         if (address(s.i_tokenVault[_token]) != address(0)) {
             revert TOKEN_ALREADY_SUPPORTED(_token, address(s.i_tokenVault[_token]));
         }
+        // Bound the initial config to the same limits the in-place setters enforce,
+        // so a vault can never be deployed with an unsafe bonus/reserve that only
+        // the setters would reject (#7). Bonus <= 10%; reserve factor <= 100%
+        // (a reserve factor above 100% underflows the LP-interest split).
+        _validateVaultConfigBounds(_config);
 
         TokenVault _tokenVault = new TokenVault(_token, _name, _symbol, address(this), s.s_interestRate, _config.reserveFactor);
         s.s_allSupportedTokens.push(_token);
@@ -259,6 +290,18 @@ library LibVaultManager {
         if (_optimalUtilization < 5000) revert BAD_RATE();
         _config.optimalUtilization = _optimalUtilization;
         emit OptimalUtilizationSet(_token, _optimalUtilization);
+    }
+
+    /// @notice Reverts unless the vault config's liquidation bonus and reserve
+    ///         factor are within the same bounds the in-place setters enforce.
+    /// @dev Bonus must be <= 1000 (10%, matching `_setLiquidationBonus`); reserve
+    ///      factor must be <= BASIS_POINTS_SCALE (100%, matching
+    ///      `TokenVault.setReserveFactor`) — a factor above 100% underflows the
+    ///      LP-interest split in `TokenVault._pendingInterest`.
+    /// @param _config The vault configuration to validate.
+    function _validateVaultConfigBounds(VaultConfiguration memory _config) internal pure {
+        if (_config.liquidationBonus > 1000) revert BAD_RATE();
+        if (_config.reserveFactor > Constants.BASIS_POINTS_SCALE) revert BAD_RATE();
     }
 
     /// @notice Set a token's liquidation bonus.
@@ -422,6 +465,28 @@ library LibVaultManager {
         TokenVault _vault = s.i_tokenVault[_token];
         if (address(_vault) == address(0)) revert TOKEN_NOT_SUPPORTED(_token);
         _vault.updateBadDebt(_amount);
+
+        VaultConfiguration storage _config = s.s_tokenVaultConfig[_token];
+
+        // The principal portion of the write-off (the interest remainder is written
+        // off the vault's `totalAccruedInterest`, never counted in `totalDeposits`).
+        // Captured BEFORE `_updateVaultRepays` decrements the borrow tally.
+        uint256 _principalLoss = _amount > _config.totalBorrows ? _config.totalBorrows : _amount;
+
+        // Mirror the write-off in the diamond-side utilization NUMERATOR.
+        // `updateBadDebt` clears the unrecoverable principal from the vault's
+        // `totalBorrows`, but `config.totalBorrows` (what `_validateVaultUtlization`
+        // reads) is a separate counter — leaving it inflated bricks new borrows (#3,
+        // 15:06 report). `_updateVaultRepays` floors at zero.
+        _updateVaultRepays(s, _token, _amount);
+
+        // Mirror the loss in the utilization DENOMINATOR too. The socialized bad
+        // debt is capital that left the vault and will not return, so the real
+        // deposit base shrank by `_principalLoss`. Reducing only the numerator left
+        // `totalDeposits` overstating available liquidity, so utilization read low
+        // and a new borrow could be admitted above the true 90% cap of liquid assets
+        // (report 2026-07-02 18:17 #3). Floor at zero for safety.
+        _config.totalDeposits = _principalLoss > _config.totalDeposits ? 0 : _config.totalDeposits - _principalLoss;
     }
 
     /// @notice Emergency stop / resume a vault's deposits.

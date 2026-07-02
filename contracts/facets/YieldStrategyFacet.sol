@@ -59,6 +59,13 @@ contract YieldStrategyFacet is SecurityBase {
         returns (uint256 claimed)
     {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        // Claiming yield moves value out of the protocol, so it must honour the
+        // whitelist/blacklist freeze like every other value-extracting entrypoint
+        // (`_borrow`, `_withdraw`, collateral deposit). Without this a user
+        // blacklisted after opening a position could still pull accrued yield,
+        // defeating the freeze (see lead: yield claim bypasses whitelist). Mirrors
+        // the deposit-side gate added for the prior blacklist finding.
+        s._addressIsWhitelisted(msg.sender);
         uint256 _positionId = s._getPositionIdForUser(msg.sender);
         if (_positionId == 0) revert NO_POSITION_ID(msg.sender);
         address _to = _recipient == address(0) ? msg.sender : _recipient;

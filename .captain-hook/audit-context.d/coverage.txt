@@ -1,0 +1,627 @@
+Warning: `--ir-minimum` enables `viaIR` with minimum optimization, which can result in inaccurate source mappings.
+Only use this flag as a workaround if you are experiencing "stack too deep" errors.
+Note that `viaIR` is production ready since Solidity 0.8.13 and above.
+See more: https://github.com/foundry-rs/foundry/issues/3357
+Compiling 128 files with Solc 0.8.30
+Solc 0.8.30 finished in 38.18s
+Compiler run successful with warnings:
+Warning (2072): Unused local variable.
+  --> test/audit/InterestModel.t.sol:61:9:
+   |
+61 |         TokenVault vault = _vault();
+   |         ^^^^^^^^^^^^^^^^
+
+Warning (2018): Function state mutability can be restricted to view
+   --> test/audit/CovVaultManager.t.sol:375:5:
+    |
+375 |     function test_getTokenVault_and_isSupported() public {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Analysing contracts...
+Running tests...
+
+Ran 21 tests for test/Liquidation.t.sol:LiquidationTest
+[PASS] testGetAmountToLiquidate() (gas: 383079)
+[PASS] testIsLiquidatable() (gas: 6889681)
+[PASS] testLiquidateLoanPartial_Success() (gas: 7245362)
+[PASS] testLiquidateLoanWithNativeTokenCollateral_Success() (gas: 7042936)
+[PASS] testLiquidateLoan_RevertInsufficientAllowance() (gas: 6590099)
+[PASS] testLiquidateLoan_RevertInsufficientBalance() (gas: 6591818)
+[PASS] testLiquidateLoan_RevertNoActiveBorrow() (gas: 6073006)
+[PASS] testLiquidateLoan_RevertNoCollateral() (gas: 6372930)
+[PASS] testLiquidateLoan_RevertNotLiquidatable() (gas: 6537437)
+[PASS] testLiquidateLoan_Success() (gas: 7132710)
+[PASS] testLiquidateLoan_cannotSkimInterestOnly() (gas: 7196135)
+[PASS] testLiquidateLoan_overduePenaltyExceedsCollateral_stillLiquidatable() (gas: 7111643)
+[PASS] testLiquidatePositionWithNativeTokenCollateral_Success() (gas: 6765838)
+[PASS] testLiquidatePosition_RevertInsufficientAllowance() (gas: 6349566)
+[PASS] testLiquidatePosition_RevertInsufficientBalance() (gas: 6350434)
+[PASS] testLiquidatePosition_RevertNoActiveBorrow() (gas: 6073088)
+[PASS] testLiquidatePosition_RevertNoCollateral() (gas: 6371646)
+[PASS] testLiquidatePosition_RevertNotLiquidatable() (gas: 6296951)
+[PASS] testLiquidatePosition_Success() (gas: 6849126)
+[PASS] testLoanIsLiquidatable() (gas: 6680093)
+[PASS] testSendingMoreAmountThanDebtOnlyLiquidateTheDebtValue() (gas: 7753860)
+Suite result: ok. 21 passed; 0 failed; 0 skipped; finished in 1.37s (44.34ms CPU time)
+
+Ran 24 tests for test/TokenVault.t.sol:TokenVaultTest
+[PASS] testBadDebtAffectsAllDepositorsEqually() (gas: 5785424)
+[PASS] testBadDebtCreationOnDefault() (gas: 5821482)
+[PASS] testBadDebtEqualsTotalBorrow() (gas: 5780112)
+[PASS] testBadDebtExceedsBorrowAndInterestReverts() (gas: 5704320)
+[PASS] testBadDebtExceedsBorrowReducesBorrowToZero() (gas: 5699100)
+[PASS] testBadDebtReducesSharePrice() (gas: 5812015)
+[PASS] testBadDebtReducesTotalAssets() (gas: 5801344)
+[PASS] testBadDebtWithAccruedInterest() (gas: 5829819)
+[PASS] testBadDebtWriteOffDuringDeposit() (gas: 5786621)
+[PASS] testBadDebtWriteOffInterestFirst() (gas: 5820866)
+[PASS] testBadDebtWriteOffThenBorrow() (gas: 5831017)
+[PASS] testCompleteDefaultScenario() (gas: 5853105)
+[PASS] testDepositIncludesDirectTransfers() (gas: 5722466)
+[PASS] testDepositorsAssetsIncreaseAfterRepay() (gas: 5862800)
+[PASS] testMultipleBadDebtWriteOffs() (gas: 5900918)
+[PASS] testPartialBadDebtRecoveryViaRepay() (gas: 5837810)
+[PASS] testRepayInterestFirstFlow() (gas: 5884889)
+[PASS] testVaultDeposit() (gas: 186752)
+[PASS] testVaultTotalAssets() (gas: 353446)
+[PASS] testVaultTotalAssetsWithDebts() (gas: 5834984)
+[PASS] testVaultTotalAssetsWithDebtsAndAccruedInterest() (gas: 5825634)
+[PASS] testVaultTotalAssetsWithDebtsAndSomeRepay() (gas: 5901385)
+[PASS] testVaultTotalBorrowsWithDebtsAndRepay() (gas: 6652474)
+[PASS] testZeroBadDebtWrite() (gas: 5692619)
+Suite result: ok. 24 passed; 0 failed; 0 skipped; finished in 1.42s (23.67ms CPU time)
+
+Ran 1 test for test/audit/BorrowTallyUndercount.t.sol:BorrowTallyUndercountTest
+[PASS] test_liquidation_undercounts_config_totalBorrows() (gas: 7455201)
+Logs:
+  config.totalBorrows after 2 loans (= 2*principal): 2000000000
+  loan1 outstanding (principal+interest+penalty): 1547322199
+  config.totalBorrows after liquidating loan1: 1224466630
+  loan2 principal + loan1 remaining principal: 1224466630
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.51s (2.61ms CPU time)
+
+Ran 2 tests for test/audit/BadDebtAndPause.t.sol:BadDebtAndPauseTest
+[PASS] test_bad_debt_write_off_socializes_loss() (gas: 6500351)
+[PASS] test_emergency_pause_halts_deposits() (gas: 6739340)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 1.51s (2.60ms CPU time)
+
+Ran 2 tests for test/audit/InterestModel.t.sol:InterestModelTest
+[PASS] test_late_lp_does_not_capture_past_interest() (gas: 6986295)
+[PASS] test_reserve_cut_and_harvest() (gas: 6862165)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 1.51s (3.73ms CPU time)
+
+Ran 14 tests for test/audit/CovLibDiamond.t.sol:CovLibDiamondTest
+[PASS] test_add_empty_selectors_reverts_NoSelectorsInFacet() (gas: 111317)
+[PASS] test_add_facet_with_no_code_reverts_NoCode() (gas: 36932)
+[PASS] test_add_zero_facet_reverts_NoZeroAddress() (gas: 27371)
+[PASS] test_init_call_failed_reverts_InitCallFailed() (gas: 89679)
+[PASS] test_init_no_code_reverts_NoCode() (gas: 31809)
+[PASS] test_init_nonzero_empty_calldata_reverts_EmptyCalldata() (gas: 92380)
+[PASS] test_init_success_path() (gas: 90496)
+[PASS] test_init_zero_nonempty_calldata_reverts_NonEmptyCalldata() (gas: 24372)
+[PASS] test_remove_immutable_function_reverts_ImmutableFunction() (gas: 171554)
+[PASS] test_remove_nonexistent_selector_reverts_NonExistentSelector() (gas: 31258)
+[PASS] test_remove_nonzero_facet_reverts_MustBeZeroAddress() (gas: 28188)
+[PASS] test_replace_nonexistent_selector_reverts_NonExistentSelector() (gas: 169976)
+[PASS] test_replace_same_facet_reverts_SameSelectorReplacement() (gas: 44972)
+[PASS] test_transfer_ownership_zero_reverts_NoZeroAddress() (gas: 19348)
+Suite result: ok. 14 passed; 0 failed; 0 skipped; finished in 1.53s (3.80ms CPU time)
+
+Ran 1 test for test/audit/DirectRedeemBypass.t.sol:DirectRedeemBypassTest
+[PASS] test_direct_redeem_desyncs_totalDeposits() (gas: 5750066)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.60s (869.79µs CPU time)
+
+Ran 2 tests for test/ProtocolLib.t.sol:ProtocolLibTest
+[PASS] testOutstandingBalance() (gas: 5367)
+[PASS] testOutstandingBalanceWithPenalty() (gas: 6916)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 1.61s (228.83µs CPU time)
+
+Ran 6 tests for test/PriceOracle.t.sol:PriceOracleTest
+[PASS] testGetPriceData() (gas: 37668)
+[PASS] testGetPriceDataFailForUnsupportedTokens() (gas: 20230)
+[PASS] testGetTokenValueInUSD() (gas: 49076)
+[PASS] testGetTokenValueInUSDFailsForUnsupportedToken() (gas: 883822)
+[PASS] testGetTokenValueInUSDForDifferentDecimals() (gas: 165491)
+[PASS] testGetTokenValueInUSDWithZeroAmount() (gas: 16070)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 1.66s (1.64ms CPU time)
+
+Ran 3 tests for test/audit/UpgradeVaultStrand.t.sol:UpgradeVaultStrandTest
+[PASS] test_upgrade_empty_vault_succeeds() (gas: 8953385)
+[PASS] test_upgrade_with_borrows_reverts() (gas: 6275354)
+[PASS] test_upgrade_with_deposits_reverts() (gas: 5801750)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 1.66s (2.60ms CPU time)
+
+Ran 3 tests for test/audit/OracleSendRequestAuth.t.sol:OracleSendRequestAuthTest
+[PASS] test_attacker_cannot_send_request() (gas: 33196)
+[PASS] test_keeper_refresh_uses_protocol_subscription() (gas: 249414)
+[PASS] test_whitelisted_user_cannot_send_request() (gas: 67961)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 1.67s (2.88ms CPU time)
+
+Ran 11 tests for test/audit/DiamondInfra.t.sol:DiamondInfraTest
+[PASS] test_diamond_init_registers_erc165_interfaces() (gas: 294159)
+[PASS] test_diamondcut_add_existing_selector_reverts() (gas: 330026)
+[PASS] test_diamondcut_add_new_facet() (gas: 248653)
+[PASS] test_diamondcut_non_owner_reverts() (gas: 24844)
+[PASS] test_diamondcut_remove_selector() (gas: 64364)
+[PASS] test_diamondcut_replace_selector() (gas: 414389)
+[PASS] test_loupe_facets_and_addresses() (gas: 217319)
+[PASS] test_loupe_selectors_and_address_lookup() (gas: 35564)
+[PASS] test_owner_is_deployer() (gas: 15543)
+[PASS] test_transfer_ownership() (gas: 33381)
+[PASS] test_transfer_ownership_non_owner_reverts() (gas: 27547)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 1.67s (4.01ms CPU time)
+
+Ran 4 tests for test/audit/AuditReport0701.t.sol:AuditReport0701Test
+[PASS] test_openEnded_repay_is_interest_first() (gas: 6633631)
+[PASS] test_requestBorrow_maturity_anchor_is_immutable() (gas: 6920469)
+[PASS] test_requestBorrow_rejects_blacklisted_wallet() (gas: 5982422)
+[PASS] test_requestBorrow_rejects_short_tenure() (gas: 5978174)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 1.68s (4.96ms CPU time)
+
+Ran 3 tests for test/audit/CovFinal.t.sol:CovFinalTest
+[PASS] test_addCollateralToken_zero_feed_reverts() (gas: 884433)
+[PASS] test_sendRequest_with_args() (gas: 608020)
+[PASS] test_setInterestRate_zero_penalty_reverts() (gas: 20003)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 1.69s (838.67µs CPU time)
+
+Ran 43 tests for test/audit/CovYield.t.sol:CovYieldTest
+[PASS] test_Accrual_CreditAcrossTwoYieldEvents() (gas: 680222)
+[PASS] test_Claim_FullDefaultRecipient() (gas: 648665)
+[PASS] test_Claim_PartialThenRemainderSpecificRecipient() (gas: 712845)
+[PASS] test_Claim_RevertNoPosition() (gas: 49754)
+[PASS] test_Claim_RevertNotEnabled() (gas: 486004)
+[PASS] test_Claim_RevertNothingToClaim() (gas: 491850)
+[PASS] test_Claim_RevertNothingToClaim_ZeroTotalPrincipal() (gas: 336629)
+[PASS] test_Claim_RevertPaused() (gas: 495376)
+[PASS] test_Configure_RevertAllocationTooHigh() (gas: 889898)
+[PASS] test_Configure_RevertBadPoolAddress() (gas: 1016879)
+[PASS] test_Configure_RevertNativeToken() (gas: 27383)
+[PASS] test_Configure_RevertNotCouncil() (gas: 31102)
+[PASS] test_Configure_RevertPoolTokenMismatch() (gas: 1023612)
+[PASS] test_Configure_RevertProtocolShareTooHigh() (gas: 891146)
+[PASS] test_Configure_RevertZeroAToken() (gas: 887237)
+[PASS] test_Configure_RevertZeroPool() (gas: 887816)
+[PASS] test_Configure_RevertZeroToken() (gas: 26177)
+[PASS] test_Configure_Success() (gas: 44627)
+[PASS] test_GetPending_DisabledTokenReturnsAccrued() (gas: 484944)
+[PASS] test_GetPending_NoPosition() (gas: 24390)
+[PASS] test_GetPending_NoYieldReturnsAccrued() (gas: 485930)
+[PASS] test_GetPending_WithYield() (gas: 509157)
+[PASS] test_GetYieldPosition_NoPosition() (gas: 24099)
+[PASS] test_GetYieldPosition_WithPosition() (gas: 481810)
+[PASS] test_Harvest_FullDefaultRecipient() (gas: 596687)
+[PASS] test_Harvest_PartialThenOverRequest() (gas: 647056)
+[PASS] test_Harvest_RevertNotCouncil() (gas: 502327)
+[PASS] test_Harvest_RevertNotEnabled() (gas: 50236)
+[PASS] test_Harvest_RevertNothingToClaim() (gas: 491084)
+[PASS] test_Harvest_RevertPaused() (gas: 62367)
+[PASS] test_Rebalance_AllocateBranch() (gas: 515436)
+[PASS] test_Rebalance_EqualIsNoop() (gas: 510868)
+[PASS] test_Rebalance_PausedIsNoop() (gas: 329868)
+[PASS] test_Rebalance_RevertNoPosition() (gas: 50068)
+[PASS] test_Rebalance_WithdrawBranch() (gas: 567938)
+[PASS] test_SetPause_PauseThenUnpause() (gas: 64974)
+[PASS] test_SetPause_RevertNotCouncil() (gas: 24998)
+[PASS] test_SetPause_RevertNotEnabled() (gas: 25165)
+[PASS] test_WithdrawDeficit_DeficitDominatesTarget() (gas: 852618)
+[PASS] test_WithdrawDeficit_DropsBelowTargetThenResupplyCapped() (gas: 649038)
+[PASS] test_WithdrawDeficit_RevertExceedsPrincipal() (gas: 769072)
+[PASS] test_WithdrawPaused_NoRebalance() (gas: 616914)
+[PASS] test_WithdrawTargetReduction_NormalUnwind() (gas: 636263)
+Suite result: ok. 43 passed; 0 failed; 0 skipped; finished in 1.71s (25.79ms CPU time)
+
+Ran 91 tests for test/Protocol.t.sol:ProtocolTest
+[PASS] testAddCollateralToken() (gas: 179897)
+[PASS] testAddCollateralTokenFailsForAddressZero() (gas: 22810)
+[PASS] testAddCollateralTokenFailsForLTVBelow10Percent() (gas: 22579)
+[PASS] testAddCollateralTokenFailsIfAlreadySupported() (gas: 32308)
+[PASS] testAddCollateralTokenFailsIfNotSecurityCouncil() (gas: 25635)
+[PASS] testBorrow() (gas: 6300483)
+[PASS] testBorrowDoubleCountingBugFix() (gas: 6183298)
+[PASS] testBorrowFailsForUnsupportedToken() (gas: 135924)
+[PASS] testBorrowFailsWithoutPosition() (gas: 52987)
+[PASS] testCompleteCollateralAndValueFlow() (gas: 621968)
+[PASS] testDepositCollateral() (gas: 298334)
+[PASS] testDepositCollateralFailsForAddressZero() (gas: 124104)
+[PASS] testDepositCollateralFailsForBlacklistedUser() (gas: 146931)
+[PASS] testDepositCollateralFailsForInsufficientAllowance() (gas: 214087)
+[PASS] testDepositCollateralFailsForInsufficientBalance() (gas: 216951)
+[PASS] testDepositCollateralFailsForUnsupportedToken() (gas: 126959)
+[PASS] testDepositCollateralFailsForZeroAmount() (gas: 48999)
+[PASS] testDepositCollateralToExistingPosition() (gas: 336870)
+[PASS] testDepositNativeTokenCollateral() (gas: 214049)
+[PASS] testDepositNativeTokenCollateralRevertWithDifferentMsgValueFromAmount() (gas: 54595)
+[PASS] testGetActiveLoanIds() (gas: 8102111)
+[PASS] testGetAllCollateralTokens() (gas: 32864)
+[PASS] testGetAllCollateralTokensAfterAddingAndRemoving() (gas: 152362)
+[PASS] testGetHealthFactorEdgeCases() (gas: 161791)
+[PASS] testGetHealthFactorWithBorrows() (gas: 351965)
+[PASS] testGetHealthFactorWithCurrentBorrowValue() (gas: 413066)
+[PASS] testGetHealthFactorWithNoBorrows() (gas: 351959)
+[PASS] testGetLoanDetails() (gas: 6534915)
+[PASS] testGetPositionBorrowableCollateralValue() (gas: 839336)
+[PASS] testGetPositionBorrowableCollateralValueReducesWithActiveLoans() (gas: 7080619)
+[PASS] testGetPositionBorrowedValue() (gas: 109283)
+[PASS] testGetPositionCollateral() (gas: 297514)
+[PASS] testGetPositionCollateralValue() (gas: 799068)
+[PASS] testGetPositionCollateralValueEmptyPosition() (gas: 126387)
+[PASS] testGetUserActiveLoanIds() (gas: 6746603)
+[PASS] testIsCollateralTokenSupported() (gas: 40243)
+[PASS] testMultipleUsersAndTokens() (gas: 654204)
+[PASS] testRemoveCollateralToken() (gas: 69445)
+[PASS] testRemoveCollateralTokenBlockedWhileHeld() (gas: 353460)
+[PASS] testRemoveCollateralTokenFailsForAddressZero() (gas: 21137)
+[PASS] testRemoveCollateralTokenFailsIfNotSecurityCouncil() (gas: 26760)
+[PASS] testRemoveCollateralTokenFailsIfNotSupported() (gas: 25087)
+[PASS] testRepayFailsForInsufficientAllowance() (gas: 6206694)
+[PASS] testRepayFailsForInsufficientBalance() (gas: 6241666)
+[PASS] testRepayLoanFailsForInsufficientAllowance() (gas: 6441820)
+[PASS] testRepayLoanFailsForInsufficientBalance() (gas: 6476033)
+[PASS] testRepayLoanFailsIfSenderIsNotOwnerOfLoan() (gas: 6614063)
+[PASS] testRepayLoanForFailsForInsufficientAllowance() (gas: 6440828)
+[PASS] testRepayLoanForFailsForInsufficientBalance() (gas: 6473408)
+[PASS] testRepayLoanForMoreThanDebt() (gas: 6465331)
+[PASS] testRepayLoanForPartial() (gas: 6513324)
+[PASS] testRepayLoanForSuccess() (gas: 6444374)
+[PASS] testRepayLoanMoreThanDebt() (gas: 6465678)
+[PASS] testRepayLoanPartial() (gas: 6514400)
+[PASS] testRepayLoanSuccess() (gas: 6445661)
+[PASS] testRepayMoreThanDebt() (gas: 6199487)
+[PASS] testRepayPartial() (gas: 6260341)
+[PASS] testRepaySuccess() (gas: 6185393)
+[PASS] testRequestBorrowFailsAfterDeadline() (gas: 5981748)
+[PASS] testRequestBorrowFailsForOverUtilization() (gas: 5984630)
+[PASS] testRequestBorrowFailsWitPositionIdMismatch() (gas: 5977557)
+[PASS] testRequestBorrowSucceedsWithinDeadline() (gas: 6403793)
+[PASS] testRequestBorrowWithValidSignature() (gas: 6446146)
+[PASS] testSetCollateralTokenLTV() (gas: 50479)
+[PASS] testSetCollateralTokenLTVFailsForAddressZero() (gas: 21033)
+[PASS] testSetCollateralTokenLTVFailsIfLTVBelow10Percent() (gas: 22468)
+[PASS] testSetCollateralTokenLTVFailsIfNotSecurityCouncil() (gas: 24972)
+[PASS] testSetCollateralTokenLTVFailsIfTokenIsNotSupportedCollateral() (gas: 24510)
+[PASS] testSetInterestRate() (gas: 43534)
+[PASS] testSetInterestRateFailsIfNotSecurityCouncil() (gas: 22500)
+[PASS] testSetInterestRateFailsIfRateIs0Percent() (gas: 19828)
+[PASS] testTakeLoan() (gas: 6554919)
+[PASS] testTakeLoanFailsForOverUtilization() (gas: 5931936)
+[PASS] testTakeLoanFailsForUnsupportedToken() (gas: 135641)
+[PASS] testTakeLoanFailsForZeroPrincipal() (gas: 132349)
+[PASS] testTakeLoanFailsWithoutPosition() (gas: 53136)
+[PASS] testTakeLoanRevertsAboveActiveLoanCap() (gas: 53731910)
+[PASS] testTakeLoanTenureTooShort() (gas: 5883129)
+[PASS] testWithdrawAllCollateral() (gas: 330224)
+[PASS] testWithdrawCollateral() (gas: 419203)
+[PASS] testWithdrawCollateralAboveLTVWithActiveBorrowFails() (gas: 6501086)
+[PASS] testWithdrawCollateralDifferentTokensIndependently() (gas: 414548)
+[PASS] testWithdrawCollateralFailsForInsufficientBalance() (gas: 274724)
+[PASS] testWithdrawCollateralFailsForZeroAmount() (gas: 378420)
+[PASS] testWithdrawCollateralFailsIfItReducesCollateralBelowLimit() (gas: 6262209)
+[PASS] testWithdrawCollateralFailsIfNoPosition() (gas: 54612)
+[PASS] testWithdrawCollateralFromEmptyBalance() (gas: 310544)
+[PASS] testWithdrawCollateralMultipleTokens() (gas: 670951)
+[PASS] testWithdrawCollateralMultipleUsers() (gas: 548419)
+[PASS] testWithdrawCollateralPartialAmounts() (gas: 446902)
+[PASS] testWithdrawNativeTokenCollateral() (gas: 327932)
+Suite result: ok. 91 passed; 0 failed; 0 skipped; finished in 1.72s (198.87ms CPU time)
+
+Ran 1 test for test/audit/LifecycleSolvency.t.sol:LifecycleSolvencyTest
+[PASS] test_lifecycle_solvency_lend_repay_liquidate() (gas: 7506346)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.23s (2.93ms CPU time)
+
+Ran 7 tests for test/audit/OracleCoverage.t.sol:OracleCoverageTest
+[PASS] test_getPriceData_negative_answer_reverts() (gas: 116233)
+[PASS] test_getPriceData_roundId_mismatch_reverts() (gas: 4707506)
+[PASS] test_getPriceData_stale_by_threshold_reverts() (gas: 146592)
+[PASS] test_getPriceData_unsupported_token_reverts() (gas: 23736)
+[PASS] test_getTokenValueInUSD_negative_answer_reverts() (gas: 92192)
+[PASS] test_oracle_config_getters_and_setters() (gas: 209057)
+[PASS] test_setStalenessThreshold_non_owner_reverts() (gas: 25906)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 1.29s (3.20ms CPU time)
+
+Ran 24 tests for test/audit/CovMiscTail.t.sol:CovMiscTailTest
+[PASS] test_diamond_unknownSelector_reverts() (gas: 10906)
+[PASS] test_libUtils_getTokenDecimals_native_and_erc20() (gas: 10044)
+[PASS] test_libUtils_normalize_scaleUp_and_scaleDown() (gas: 3817)
+[PASS] test_liquidation_insufficientCollateral_reverts() (gas: 6806381)
+[PASS] test_liquidation_loan_belowInterest_reducesPrincipal() (gas: 7190123)
+[PASS] test_oracle_fulfillment_notRouter_reverts() (gas: 852647)
+[PASS] test_oracle_fulfillment_unknownRequestId_reverts() (gas: 699421)
+[PASS] test_oracle_fundSubscription_succeeds() (gas: 696124)
+[PASS] test_oracle_getTokenValueInUSD_zeroAmount_returnsZero() (gas: 16295)
+[PASS] test_oracle_sendRequest_and_fulfillment_success() (gas: 920018)
+[PASS] test_securityBase_onlySecurityCouncil_reverts() (gas: 24666)
+[PASS] test_tokenVault_borrow_insufficientLiquidBalance_reverts() (gas: 4512974)
+[PASS] test_tokenVault_getters() (gas: 4532857)
+[PASS] test_tokenVault_mint_and_redeem_viaDiamond_succeed() (gas: 4511415)
+[PASS] test_tokenVault_mint_onlyDiamond_reverts() (gas: 4377639)
+[PASS] test_tokenVault_redeem_onlyDiamond_reverts() (gas: 4492633)
+[PASS] test_tokenVault_setInterestRate_accruesAndStores() (gas: 4561366)
+[PASS] test_tokenVault_setReserveFactor_aboveScale_reverts() (gas: 4374334)
+[PASS] test_tokenVault_setReserveFactor_valid_succeeds() (gas: 4372435)
+[PASS] test_tokenVault_updateBadDebt_aboveOutstanding_reverts() (gas: 4378605)
+[PASS] test_tokenVault_withdrawReserve_aboveReserve_reverts() (gas: 4376883)
+[PASS] test_tokenVault_withdrawReserve_success() (gas: 4565648)
+[PASS] test_tokenVault_withdraw_insufficientLiquidBalance_reverts() (gas: 4543370)
+[PASS] test_tokenVault_withdraw_insufficientShares_reverts() (gas: 4507124)
+Suite result: ok. 24 passed; 0 failed; 0 skipped; finished in 1.32s (14.85ms CPU time)
+
+Ran 4 tests for test/audit/WeirdTokenDeposit.t.sol:WeirdTokenDepositTest
+[PASS] test_fee_on_transfer_credits_received_not_nominal() (gas: 5417938)
+[PASS] test_fee_on_transfer_repay_reverts_on_shortfall() (gas: 5948571)
+[PASS] test_fee_on_transfer_vault_does_not_overmint_shares() (gas: 5425533)
+[PASS] test_usdt_style_no_return_token_deposits() (gas: 5382726)
+Suite result: ok. 4 passed; 0 failed; 0 skipped; finished in 1.24s (3.24ms CPU time)
+
+Ran 1 test for test/audit/PooledBorrowTally.t.sol:PooledBorrowTallyTest
+[PASS] test_pooled_repay_undercounts_and_vault_matches() (gas: 6808854)
+Logs:
+  config after 2 borrows: 2000000000
+  vault  after 2 borrows: 2000000000
+  user1 debt repaid (principal + interest): 1273972602
+  config after user1 full repay: 1000000000
+  vault  after user1 full repay: 1000000000
+  true outstanding principal (user2): 1000000000
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.33s (2.17ms CPU time)
+
+Ran 1 test for test/audit/FixedRateAccrual.t.sol:FixedRateAccrualTest
+[PASS] test_fixedLoan_accrual_unaffected_by_rate_hike() (gas: 6504404)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.29s (1.47ms CPU time)
+
+Ran 1 test for test/audit/DepositCounterDrift.t.sol:DepositCounterDriftTest
+[PASS] test_totalDeposits_tracks_principal_not_interest() (gas: 7568781)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.41s (2.37ms CPU time)
+
+Ran 2 tests for test/audit/PenaltyClock.t.sol:PenaltyClockTest
+[PASS] test_dust_repayment_reverts() (gas: 6840670)
+[PASS] test_partial_repay_does_not_reset_penalty_clock() (gas: 7217503)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 1.26s (3.44ms CPU time)
+
+Ran 47 tests for test/audit/CovVaultManager.t.sol:CovVaultManagerTest
+[PASS] test_deploy_revert_already_supported() (gas: 57710)
+[PASS] test_deploy_revert_zero_pricefeed() (gas: 903323)
+[PASS] test_deploy_revert_zero_token() (gas: 39302)
+[PASS] test_deploy_success() (gas: 4496673)
+[PASS] test_deposit_creates_then_reuses_position() (gas: 423064)
+[PASS] test_deposit_revert_token_not_supported() (gas: 29961)
+[PASS] test_deposit_revert_zero_amount() (gas: 26616)
+[PASS] test_deposit_revert_zero_token() (gas: 23521)
+[PASS] test_getTokenVaultDetails_reflects_borrows() (gas: 1071404)
+[PASS] test_getTokenVault_and_isSupported() (gas: 40849)
+[PASS] test_getVaultReserve_revert_no_vault() (gas: 34444)
+[PASS] test_getVaultTotalAssets_success_and_revert() (gas: 348037)
+[PASS] test_harvest_nonzero_reserve_default_recipient() (gas: 1521897)
+[PASS] test_harvest_revert_no_vault() (gas: 24252)
+[PASS] test_harvest_zero_reserve_returns_zero() (gas: 340971)
+[PASS] test_pauseTokenSupport_revert_not_supported() (gas: 23117)
+[PASS] test_pauseTokenSupport_revert_zero() (gas: 20319)
+[PASS] test_pause_then_resume_support() (gas: 51192)
+[PASS] test_resumeTokenSupport_already_supported_noop() (gas: 38906)
+[PASS] test_resumeTokenSupport_revert_no_vault() (gas: 23799)
+[PASS] test_resumeTokenSupport_revert_zero() (gas: 19540)
+[PASS] test_setBaseRate_revert_above_slope() (gas: 24569)
+[PASS] test_setBaseRate_revert_zero() (gas: 21869)
+[PASS] test_setBaseRate_success() (gas: 44160)
+[PASS] test_setLiquidationBonus_revert_too_high() (gas: 23043)
+[PASS] test_setLiquidationBonus_success() (gas: 43098)
+[PASS] test_setOptimalUtilization_revert_below_floor() (gas: 22899)
+[PASS] test_setOptimalUtilization_revert_zero() (gas: 21984)
+[PASS] test_setOptimalUtilization_success() (gas: 44081)
+[PASS] test_setReserveFactor_no_vault_branch() (gas: 60996)
+[PASS] test_setReserveFactor_revert_zero() (gas: 21731)
+[PASS] test_setReserveFactor_success_and_vault_synced() (gas: 60783)
+[PASS] test_setSlopeRate_revert_below_base() (gas: 24063)
+[PASS] test_setSlopeRate_revert_zero() (gas: 21685)
+[PASS] test_setSlopeRate_success() (gas: 44022)
+[PASS] test_setVaultPaused_blocks_then_resumes_deposits() (gas: 529451)
+[PASS] test_setVaultPaused_revert_no_vault() (gas: 24020)
+[PASS] test_upgrade_revert_no_vault() (gas: 40301)
+[PASS] test_utilization_at_cap_reverts_borrow() (gas: 566956)
+[PASS] test_utilization_just_under_cap_allows_borrow() (gas: 841335)
+[PASS] test_withdraw_revert_no_position() (gas: 34788)
+[PASS] test_withdraw_revert_token_not_supported() (gas: 30423)
+[PASS] test_withdraw_revert_zero_amount() (gas: 25997)
+[PASS] test_withdraw_revert_zero_token() (gas: 24121)
+[PASS] test_withdraw_success_decrements_principal() (gas: 430514)
+[PASS] test_writeOff_revert_no_vault() (gas: 23126)
+[PASS] test_writeOff_success_socializes_loss() (gas: 1122589)
+Suite result: ok. 47 passed; 0 failed; 0 skipped; finished in 1.28s (33.74ms CPU time)
+
+Ran 1 test for test/audit/FixedRateOverflow.t.sol:FixedRateOverflowTest
+[PASS] test_overdue_loan_high_rate_sum_no_overflow() (gas: 7687749)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.26s (2.42ms CPU time)
+
+Ran 1 test for test/audit/DiamondWithdraw.t.sol:DiamondWithdrawTest
+[PASS] test_depositor_can_withdraw_without_share_approval() (gas: 5706547)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.31s (1.14ms CPU time)
+
+Ran 1 test for test/audit/PooledDebtUtilizationReprice.t.sol:PooledDebtUtilizationRepriceTest
+[PASS] test_utilization_spike_does_not_reprice_existing_borrower() (gas: 6820312)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 1.32s (1.86ms CPU time)
+
+Ran 35 tests for test/VaultManager.t.sol:VaultManagerTest
+[PASS] testCannotAddAddressZeroAsSupportedToken() (gas: 40449)
+[PASS] testCannotDeployVaultForTokensWithPausedSupport() (gas: 3628373)
+[PASS] testCannotDeployVaultMultipleTimesForSameToken() (gas: 3638616)
+[PASS] testCannotPauseAddressZeroAsSupportedToken() (gas: 19455)
+[PASS] testCannotPauseOrResumeTokenSupportForTokenThatIsNotSupported() (gas: 36703)
+[PASS] testCannotResumeAddressZeroAsSupportedToken() (gas: 19412)
+[PASS] testDeploVaultEmitTokenAdded() (gas: 3624926)
+[PASS] testDeployVault() (gas: 3636039)
+[PASS] testDeposit() (gas: 351050)
+[PASS] testGetTokenVaultDetails() (gas: 367102)
+[PASS] testOnlyContractOwnerCanDeployVault() (gas: 39623)
+[PASS] testOnlyContractOwnerCanPauseTokenSupport() (gas: 3631648)
+[PASS] testOnlyContractOwnerCanResumeTokenSupport() (gas: 3620378)
+[PASS] testPauseTokenSupport() (gas: 3618459)
+[PASS] testResumeTokenSupport() (gas: 3648203)
+[PASS] testSetBaseRate() (gas: 52947)
+[PASS] testSetBaseRateRevertsIfNotCouncil() (gas: 25656)
+[PASS] testSetBaseRateRevertsIfSlopeLower() (gas: 37211)
+[PASS] testSetBaseRateRevertsOnZero() (gas: 22106)
+[PASS] testSetLiquidationBonus() (gas: 52667)
+[PASS] testSetLiquidationBonusRevertsIfNotCouncil() (gas: 25633)
+[PASS] testSetLiquidationBonusRevertsIfTooHigh() (gas: 22475)
+[PASS] testSetOptimalUtilization() (gas: 52546)
+[PASS] testSetOptimalUtilizationRevertsIfNotCouncil() (gas: 26001)
+[PASS] testSetOptimalUtilizationRevertsIfTooLow() (gas: 23044)
+[PASS] testSetOptimalUtilizationRevertsOnZero() (gas: 22175)
+[PASS] testSetReserveFactor() (gas: 69754)
+[PASS] testSetReserveFactorRevertsIfNotCouncil() (gas: 25771)
+[PASS] testSetReserveFactorRevertsOnZero() (gas: 22175)
+[PASS] testSetSlopeRate() (gas: 52464)
+[PASS] testSetSlopeRateRevertsIfBaseHigher() (gas: 24530)
+[PASS] testSetSlopeRateRevertsIfNotCouncil() (gas: 25909)
+[PASS] testSetSlopeRateRevertsOnZero() (gas: 22704)
+[PASS] testVaultDeposit() (gas: 204989)
+[PASS] testWithdraw() (gas: 436698)
+Suite result: ok. 35 passed; 0 failed; 0 skipped; finished in 1.32s (26.35ms CPU time)
+
+Ran 20 tests for test/audit/CovProtocol.t.sol:CovProtocolTest
+[PASS] testBorrowFailsForHealthFactorTooLow() (gas: 6032075)
+[PASS] testBorrowFailsForOverUtilization() (gas: 5941340)
+[PASS] testBorrowSecondTimeSameTokenCapitalizesInterest() (gas: 6643487)
+[PASS] testBorrowableCollateralValueZeroWhenUnderwater() (gas: 6876530)
+[PASS] testOutstandingBalanceNonFulfilledReturnsZero() (gas: 3581)
+[PASS] testRepayFailsForNoOutstandingDebt() (gas: 5945022)
+[PASS] testRepayLoanForFailsForInactiveLoan() (gas: 6471862)
+[PASS] testRepayLoanForFailsForRepaymentBelowInterest() (gas: 6488396)
+[PASS] testRequestBorrowFailsForContractMismatch() (gas: 5946230)
+[PASS] testRequestBorrowFailsForEmptyAction() (gas: 5940171)
+[PASS] testRequestBorrowFailsForInvalidSignature() (gas: 5996172)
+[PASS] testRequestBorrowFailsForNoPosition() (gas: 5728742)
+[PASS] testRequestBorrowFailsForReusedNonce() (gas: 6429934)
+[PASS] testRequestBorrowFailsForTargetChainMismatch() (gas: 5945157)
+[PASS] testRequestBorrowFailsForUnsupportedToken() (gas: 5947523)
+[PASS] testRequestBorrowFailsForZeroAmount() (gas: 5941591)
+[PASS] testRequestBorrowFailsForZeroContractAddress() (gas: 5941292)
+[PASS] testRequestBorrowFailsForZeroWallet() (gas: 5940149)
+[PASS] testRequestBorrowFailsWhenSignerNotSet() (gas: 5957807)
+[PASS] testTakeLoanFailsForHealthFactorTooLow() (gas: 6032697)
+Suite result: ok. 20 passed; 0 failed; 0 skipped; finished in 1.48s (36.97ms CPU time)
+
+Ran 1 test for test/deployDiamond.t.sol:DiamondDeployer
+[PASS] testDeployDiamond() (gas: 3429821)
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 209.51ms (209.33ms CPU time)
+
+Ran 17 tests for test/PositionManager.t.sol:PositionManagerTest
+[PASS] testAcceptPositionTransferFailsForNonRecipient() (gas: 135841)
+[PASS] testAcceptPositionTransferFailsWhenNonePending() (gas: 99700)
+[PASS] testAdminForceTransferPosition() (gas: 121801)
+[PASS] testAdminForceTransferPositionFailsIfNotCalledByContractOwner() (gas: 99764)
+[PASS] testCancelPositionTransfer() (gas: 131457)
+[PASS] testCreatePositionFor() (gas: 155218)
+[PASS] testCreatePositionForEmitPositionCreatedEvent() (gas: 92262)
+[PASS] testCreatePositionForFailsWithDulplicateAddress() (gas: 95282)
+[PASS] testGetNextPositionId() (gas: 758137)
+[PASS] testGetPositionIdForUser() (gas: 768927)
+[PASS] testGetUserForPositionId() (gas: 768355)
+[PASS] testTransferPositionOwnership() (gas: 153098)
+[PASS] testTransferPositionOwnershipEmitsEvent() (gas: 134559)
+[PASS] testTransferPositionOwnershipFailsWhenNewAddressAlreadyHasPosition() (gas: 156012)
+[PASS] testTransferPositionOwnershipFailsWhenUserIsNotRegistered() (gas: 21231)
+[PASS] testTransferPositionOwnershipRequiresRecipientAccept() (gas: 133541)
+[PASS] testWhitelistAndBlacklistAddress() (gas: 125243)
+Suite result: ok. 17 passed; 0 failed; 0 skipped; finished in 1.39s (11.84ms CPU time)
+
+Ran 2 tests for test/audit/FixedRateLpSplit.t.sol:FixedRateLpSplitTest
+[PASS] test_below_cap_lp_yield_scales_with_utilization() (gas: 6498748)
+[PASS] test_grossed_up_apr_gives_lp_20pct_at_cap() (gas: 6506989)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 1.37s (3.87ms CPU time)
+
+Ran 3 tests for test/Integration.t.sol:IntegrationTest
+[PASS] test_config_setters_emit_events() (gas: 5478804)
+[PASS] test_full_lifecycle_deposit_borrow_repay_withdraw() (gas: 6693746)
+[PASS] test_liquidation_lifecycle() (gas: 7105090)
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 888.25ms (7.39ms CPU time)
+
+Ran 11 tests for test/YieldStrategy.t.sol:YieldStrategyTest
+[PASS] testConfigureRevertsOnBadPoolAddress() (gas: 1020394)
+[PASS] testConfigureRevertsOnPoolTokenMismatch() (gas: 1026684)
+[PASS] testDeficitChargedToWithdrawer() (gas: 765602)
+[PASS] testDeficitRevertsWhenExceedingPrincipal() (gas: 752934)
+[PASS] testDepositAllocatesCollateralToAave() (gas: 482216)
+[PASS] testDoubleWithdrawalOnCollateralWithdraw() (gas: 639471)
+[PASS] testPartialWithdrawalReverts() (gas: 838118)
+[PASS] testProtocolCanHarvestShare() (gas: 584542)
+[PASS] testUsersCanClaimYieldShare() (gas: 657482)
+[PASS] testWithdrawUnwindsYieldAllocation() (gas: 624993)
+[PASS] testYieldClaimMaintainsInvariants() (gas: 1190803)
+Suite result: ok. 11 passed; 0 failed; 0 skipped; finished in 887.82ms (16.00ms CPU time)
+
+Ran 35 test suites in 3.55s (48.60s CPU time): 411 tests passed, 0 failed, 0 skipped (411 total tests)
+
+╭-----------------------------------------------+--------------------+--------------------+------------------+------------------╮
+| File                                          | % Lines            | % Statements       | % Branches       | % Funcs          |
++===============================================================================================================================+
+| contracts/Diamond.sol                         | 54.55% (12/22)     | 52.17% (12/23)     | 0.00% (0/2)      | 66.67% (2/3)     |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/TokenVault.sol                      | 88.24% (135/153)   | 86.75% (144/166)   | 77.42% (24/31)   | 93.55% (29/31)   |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/facets/DiamondCutFacet.sol          | 100.00% (3/3)      | 100.00% (2/2)      | 100.00% (0/0)    | 100.00% (1/1)    |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/facets/DiamondLoupeFacet.sol        | 100.00% (20/20)    | 100.00% (22/22)    | 100.00% (0/0)    | 100.00% (5/5)    |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/facets/GettersFacet.sol             | 100.00% (57/57)    | 100.00% (71/71)    | 100.00% (0/0)    | 100.00% (19/19)  |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/facets/LiquidationFacet.sol         | 100.00% (9/9)      | 100.00% (10/10)    | 100.00% (0/0)    | 100.00% (3/3)    |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/facets/OwnershipFacet.sol           | 100.00% (5/5)      | 100.00% (3/3)      | 100.00% (0/0)    | 100.00% (2/2)    |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/facets/PositionManagerFacet.sol     | 90.32% (28/31)     | 89.66% (26/29)     | 100.00% (0/0)    | 92.31% (12/13)   |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/facets/PriceOracleFacet.sol         | 86.21% (50/58)     | 87.30% (55/63)     | 100.00% (2/2)    | 86.67% (13/15)   |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/facets/ProtocolFacet.sol            | 100.00% (36/36)    | 100.00% (42/42)    | 100.00% (0/0)    | 100.00% (12/12)  |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/facets/VaultManagerFacet.sol        | 100.00% (52/52)    | 100.00% (59/59)    | 100.00% (0/0)    | 100.00% (17/17)  |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/facets/YieldStrategyFacet.sol       | 100.00% (35/35)    | 100.00% (41/41)    | 100.00% (4/4)    | 100.00% (8/8)    |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/libraries/LibAppStorage.sol         | 66.67% (2/3)       | 50.00% (1/2)       | 100.00% (0/0)    | 100.00% (1/1)    |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/libraries/LibDiamond.sol            | 89.32% (92/103)    | 87.29% (103/118)   | 71.88% (23/32)   | 100.00% (13/13)  |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/libraries/LibLiquidation.sol        | 100.00% (74/74)    | 95.92% (94/98)     | 66.67% (8/12)    | 100.00% (5/5)    |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/libraries/LibPositionManager.sol    | 98.25% (56/57)     | 94.34% (50/53)     | 77.78% (7/9)     | 100.00% (14/14)  |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/libraries/LibPriceOracle.sol        | 92.75% (64/69)     | 90.28% (65/72)     | 66.67% (8/12)    | 92.86% (13/14)   |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/libraries/LibProtocol.sol           | 97.32% (327/336)   | 96.40% (428/444)   | 87.65% (71/81)   | 100.00% (33/33)  |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/libraries/LibUtils.sol              | 78.57% (11/14)     | 77.78% (14/18)     | 100.00% (3/3)    | 75.00% (3/4)     |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/libraries/LibVaultManager.sol       | 97.39% (149/153)   | 96.57% (169/175)   | 89.47% (34/38)   | 100.00% (22/22)  |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/libraries/LibYieldStrategy.sol      | 94.74% (162/171)   | 93.56% (189/202)   | 80.95% (34/42)   | 100.00% (13/13)  |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/libraries/SecurityBase.sol          | 90.91% (10/11)     | 90.91% (10/11)     | 50.00% (2/4)     | 100.00% (3/3)    |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/mocks/MockAavePool.sol              | 91.30% (21/23)     | 90.00% (18/20)     | 7.69% (1/13)     | 100.00% (5/5)    |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/mocks/MockMismatchPool.sol          | 100.00% (6/6)      | 100.00% (3/3)      | 100.00% (0/0)    | 100.00% (3/3)    |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| contracts/upgradeInitializers/DiamondInit.sol | 100.00% (6/6)      | 100.00% (6/6)      | 100.00% (0/0)    | 100.00% (1/1)    |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| test/Base.t.sol                               | 95.92% (94/98)     | 96.91% (94/97)     | 60.00% (3/5)     | 90.91% (10/11)   |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| test/audit/CovFinal.t.sol                     | 100.00% (3/3)      | 100.00% (3/3)      | 100.00% (0/0)    | 100.00% (1/1)    |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| test/audit/CovLibDiamond.t.sol                | 40.00% (2/5)       | 50.00% (1/2)       | 100.00% (0/0)    | 33.33% (1/3)     |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| test/audit/CovMiscTail.t.sol                  | 100.00% (8/8)      | 100.00% (5/5)      | 100.00% (0/0)    | 100.00% (3/3)    |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| test/audit/DiamondInfra.t.sol                 | 100.00% (2/2)      | 100.00% (1/1)      | 100.00% (0/0)    | 100.00% (1/1)    |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| test/audit/OracleCoverage.t.sol               | 50.00% (2/4)       | 50.00% (1/2)       | 100.00% (0/0)    | 50.00% (1/2)     |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| test/audit/OracleSendRequestAuth.t.sol        | 100.00% (4/4)      | 100.00% (4/4)      | 100.00% (0/0)    | 100.00% (1/1)    |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| test/audit/WeirdTokenDeposit.t.sol            | 90.32% (28/31)     | 92.00% (23/25)     | 100.00% (2/2)    | 88.89% (8/9)     |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| test/fuzzing/LendbitFuzz.sol                  | 0.00% (0/276)      | 0.00% (0/359)      | 0.00% (0/23)     | 0.00% (0/36)     |
+|-----------------------------------------------+--------------------+--------------------+------------------+------------------|
+| Total                                         | 80.75% (1565/1938) | 78.59% (1769/2251) | 71.75% (226/315) | 85.02% (278/327) |
+╰-----------------------------------------------+--------------------+--------------------+------------------+------------------╯

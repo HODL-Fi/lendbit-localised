@@ -74,6 +74,33 @@ library LibAppStorage {
         // tally is decremented by principal only on repay. Appended at the end of
         // the struct for upgrade-safe storage layout.
         mapping(uint256 => mapping(address => uint256)) s_positionPrincipal;
+        // Dedicated keeper allowlist for triggering protocol-funded Chainlink
+        // Functions refreshes. Kept separate from `isWhitelisted` (the general
+        // borrower/depositor onboarding gate) so ordinary users can never bill
+        // the protocol's LINK subscription. Appended at the end of the struct
+        // for upgrade-safe storage layout.
+        mapping(address => bool) s_isKeeper;
+        // Two-step (pull) position transfer: positionId -> proposed new owner.
+        // A user-initiated `transferPositionOwnership` only records the proposal
+        // here; the recipient must `acceptPositionTransfer` before ownership (and
+        // the attached debt/collateral) moves, so no one can be forced to receive
+        // an unwanted position. Appended at the end for upgrade-safe layout.
+        mapping(uint256 => address) s_pendingPositionTransfer;
+        // Aggregate collateral held per token across all positions. Maintained
+        // alongside every `s_positionCollateral` mutation so a collateral token
+        // can only be delisted once no position still holds it — otherwise
+        // removal drops the token from `s_allCollateralTokens`, silently valuing
+        // outstanding holdings at zero and making solvent positions liquidatable.
+        // Appended at the end for upgrade-safe layout.
+        mapping(address => uint256) s_totalCollateralDeposited;
+        // Per-collateral liquidation threshold in basis points, separate from the
+        // per-token LTV (which is the origination/borrow limit). A position is
+        // liquidatable once its debt exceeds Σ(collateralValue · threshold). A zero
+        // entry means "use the protocol default" (`Constants.LIQUIDATION_THRESHOLD`,
+        // 90%), so existing collaterals and the default deployment keep exactly the
+        // current flat-90%-of-raw behaviour until governance tunes a token.
+        // Appended at the end for upgrade-safe layout.
+        mapping(address => uint16) s_collateralLiquidationThreshold;
     }
 
     bytes32 internal constant STORAGE_SLOT = keccak256("contracts.storage.LibAppStorage");

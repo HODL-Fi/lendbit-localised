@@ -337,19 +337,174 @@ contract LiquidationTest is Base {
 
         (,, uint256 principal, uint256 repaid,,, uint256 debt,,, uint8 status) = gettersF.getLoanDetails(_loanId);
 
-        // liquidator should receive $6000 worth of token1 and 10% liquidation bonus
-        // Liquidator should receive 4.88...e18 token1
+        // Allocation is pro-rata across principal and interest (#4): a `_payback`
+        // of `_debt/2` retires half of the principal, not "interest-first".
+        uint256 _principalRepaid = (_payback * _borrowAmount) / _debt;
+        uint256 _expectedPrincipal = _borrowAmount - _principalRepaid;
+        // The interest anchor is NOT reset on a partial liquidation (#2), so the
+        // accrued interest on the surviving principal is retained rather than
+        // forgiven. At maturity the remaining principal has accrued the same rate
+        // fraction as the original loan, so outstanding debt is that principal
+        // grossed up by the loan's rate: `principal * originalDebt / originalPrincipal`.
+        uint256 _expectedDebt = (_expectedPrincipal * _debt) / _borrowAmount;
         uint256 _userCollateralNow = gettersF.getPositionCollateral(_positionId, address(token1));
         uint256 _liquidatorBalance = token1.balanceOf(liquidator);
         assertEq(repaid, _payback);
-        assertEq(debt, (_debt - _payback)); // new outstanding debt from loan details is minus the repaid
-        assertEq(principal, ((_borrowAmount * 120 / 100) - _payback)); // the new principal used to calculate the outstanding debt
+        assertEq(principal, _expectedPrincipal); // remaining principal after pro-rata reduction
+        assertEq(debt, _expectedDebt); // remaining principal + retained accrued interest (#2)
         assertEq(uint8(LoanStatus.FULFILLED), status); // loan is still open
         assertEq(_userCollateralBefore, _userCollateralNow + _liquidatorBalance);
         assertEq(_vaultBalanceBefore + _payback, token4.balanceOf(gettersF.getTokenVault(address(token4))));
         assertEq(_vaultTotalAssetBefore, gettersF.getVaultTotalAssets(address(token4))); // should be equal because total assets adds debt loans
         assertGt(_borrowAmount, token4.balanceOf(liquidator));
         assertLt(_t1BalanceBefore, token1.balanceOf(liquidator));
+    }
+
+    /// @notice Finding #4a — a deeply-overdue loan whose bonus-adjusted
+    ///         interest+penalty exceeds the remaining collateral used to be
+    ///         permanently un-liquidatable (seizure-revert deadlocked against the
+    ///         interest floor) → its principal became bad debt. The fix caps the
+    ///         seizure to available collateral and retires principal pro-rata, so
+    ///         the loan can still be liquidated.
+    function testLiquidateLoan_overduePenaltyExceedsCollateral_stillLiquidatable() public {
+        createVaultAndFund(1_000e6);
+        uint256 _positionId = depositCollateralFor(user1, address(token1), 5 ether); // $7,500
+
+        uint256 _borrowAmount = 20e6; // $5,000
+        vm.prank(user1);
+        uint256 _loanId = protocolF.takeLoan(address(token4), _borrowAmount, 1 days);
+
+        // Go far past maturity so the penalty (unbounded in time-overdue) makes
+        // the bonus-adjusted seizure for even the interest exceed the collateral.
+        vm.warp(block.timestamp + 3650 days);
+        updatePricefeedsData();
+
+        uint256 _debt = gettersF.getOutstandingDebtForLoan(_loanId);
+        (,, uint256 _principalBefore,,,,,,,) = gettersF.getLoanDetails(_loanId);
+        assertTrue(liquidationF.isLiquidatable(_positionId), "position is underwater");
+
+        // Liquidator offers to repay the whole debt; only the scaled-down amount
+        // that the collateral can back is actually pulled.
+        token4.mint(liquidator, _debt);
+        vm.startPrank(liquidator);
+        token4.approve(address(liquidationF), _debt);
+        // Pre-fix this reverted INSUFFICIENT_COLLATERAL / REPAYMENT_BELOW_INTEREST.
+        liquidationF.liquidateLoan(_loanId, _debt, address(token1));
+        vm.stopPrank();
+
+        uint256 _collAfter = gettersF.getPositionCollateral(_positionId, address(token1));
+        (,, uint256 _principalAfter,,,,,,,) = gettersF.getLoanDetails(_loanId);
+        assertEq(_collAfter, 0, "seizure capped at and consumed all collateral");
+        assertLt(_principalAfter, _principalBefore, "principal retired despite deep insolvency");
+        assertGt(token1.balanceOf(liquidator), 0, "liquidator seized the collateral");
+    }
+
+    /// @notice Finding #4b — paying exactly the accrued interest used to retire
+    ///         ZERO principal (interest-first) while still seizing bonus
+    ///         collateral, and was repeatable in a loop because
+    ///         `_outstandingBalance` ignores `repaid`. Pro-rata allocation forces
+    ///         every liquidation to retire principal, so the skim is impossible.
+    function testLiquidateLoan_cannotSkimInterestOnly() public {
+        createVaultAndFund(1_000e6);
+        uint256 _positionId = depositCollateralFor(user1, address(token1), 20 ether); // ample collateral
+
+        uint256 _borrowAmount = 20e6; // $5,000
+        vm.prank(user1);
+        uint256 _loanId = protocolF.takeLoan(address(token4), _borrowAmount, 1 days);
+
+        vm.warp(block.timestamp + 30 days); // overdue → real interest + penalty
+        updatePricefeedsData();
+
+        uint256 _debt = gettersF.getOutstandingDebtForLoan(_loanId);
+        (,, uint256 _principalBefore,,,,,,,) = gettersF.getLoanDetails(_loanId);
+        uint256 _interestDue = _debt - _principalBefore;
+        assertGt(_interestDue, 0, "loan accrued interest + penalty");
+
+        MockV3Aggregator(pricefeed1).updateAnswer(250e8); // underwater, collateral remains
+        assertTrue(liquidationF.isLiquidatable(_positionId));
+
+        // Pay EXACTLY the accrued interest — the old skim input.
+        token4.mint(liquidator, _interestDue);
+        vm.startPrank(liquidator);
+        token4.approve(address(liquidationF), _interestDue);
+        liquidationF.liquidateLoan(_loanId, _interestDue, address(token1));
+        vm.stopPrank();
+
+        (,, uint256 _principalAfter,,,,,,,) = gettersF.getLoanDetails(_loanId);
+        // Old interest-first code: _principalAfter == _principalBefore (pure skim).
+        // Pro-rata: principal strictly decreased.
+        assertLt(_principalAfter, _principalBefore, "interest-only payment still retires principal");
+    }
+
+    /// @notice Finding #1 (report 2026-07-01-233007) — the OPEN-ENDED liquidation
+    ///         path (`_liquidatePosition`) previously used interest-first
+    ///         accounting, so an interest-only payment seized bonus collateral
+    ///         while the pooled principal tally stayed put — repeatable per block.
+    ///         It now allocates pro-rata, so every liquidation retires principal.
+    function testLiquidatePosition_cannotSkimInterestOnly() public {
+        createVaultAndFund(1_000e6);
+        uint256 _pid = depositCollateralFor(user1, address(token1), 10 ether);
+
+        uint256 _borrowAmount = 20e6;
+        vm.prank(user1);
+        protocolF.borrow(address(token4), _borrowAmount); // open-ended (pooled) borrow
+
+        vm.warp(block.timestamp + 180 days); // accrue interest
+        updatePricefeedsData();
+
+        uint256 _principalTallyBefore = vaultManagerF.getTokenVaultConfig(address(token4)).totalBorrows;
+        assertEq(_principalTallyBefore, _borrowAmount, "tally == borrowed principal");
+
+        uint256 _debt = gettersF.getBorrowDetails(_pid, address(token4));
+        uint256 _interestOnly = _debt - _borrowAmount;
+        assertGt(_interestOnly, 0, "interest accrued");
+
+        MockV3Aggregator(pricefeed1).updateAnswer(250e8); // underwater, collateral remains
+        assertTrue(liquidationF.isLiquidatable(_pid));
+
+        // Liquidator pays ONLY the accrued interest.
+        token4.mint(liquidator, _interestOnly);
+        vm.startPrank(liquidator);
+        token4.approve(address(liquidationF), _interestOnly);
+        liquidationF.liquidatePosition(_pid, _interestOnly, address(token4), address(token1));
+        vm.stopPrank();
+
+        // Pooled principal tally strictly decreased — no interest-only skim.
+        uint256 _principalTallyAfter = vaultManagerF.getTokenVaultConfig(address(token4)).totalBorrows;
+        assertLt(_principalTallyAfter, _principalTallyBefore, "liquidation retired pooled principal");
+    }
+
+    /// @notice Finding #2 (report 2026-07-01-233007) — a partial fixed-loan
+    ///         liquidation used to reset `startTimestamp`, forgiving accrued
+    ///         interest on the surviving principal (and stranding the vault
+    ///         receivable). The anchor is no longer reset, so the remaining
+    ///         principal keeps carrying its accrued interest.
+    function testLiquidateLoan_partial_retains_accrued_interest() public {
+        createVaultAndFund(1_000e6);
+        uint256 _pid = depositCollateralFor(user1, address(token1), 10 ether);
+
+        vm.prank(user1);
+        uint256 _loanId = protocolF.takeLoan(address(token4), 20e6, 365 days);
+
+        vm.warp(block.timestamp + 180 days); // mid-accrual (not yet matured)
+        updatePricefeedsData();
+
+        MockV3Aggregator(pricefeed1).updateAnswer(250e8);
+        assertTrue(liquidationF.isLiquidatable(_pid));
+
+        uint256 _pay = gettersF.getOutstandingDebtForLoan(_loanId) / 2;
+        token4.mint(liquidator, _pay);
+        vm.startPrank(liquidator);
+        token4.approve(address(liquidationF), _pay);
+        liquidationF.liquidateLoan(_loanId, _pay, address(token1));
+        vm.stopPrank();
+
+        // Outstanding debt strictly exceeds remaining principal: the accrued
+        // interest on the survivor is retained, not forgiven. The old reset code
+        // made debt == principal at the reset instant.
+        (,, uint256 _principalAfter,,,, uint256 _debtAfter,,,) = gettersF.getLoanDetails(_loanId);
+        assertGt(_principalAfter, 0, "loan still open");
+        assertGt(_debtAfter, _principalAfter, "accrued interest on remaining principal retained");
     }
 
     function testLiquidateLoanWithNativeTokenCollateral_Success() public {

@@ -5,6 +5,12 @@ pragma solidity 0.8.30;
 /// @dev Holds all the constant for our protocol
 library Constants {
     uint16 constant LIQUIDATION_THRESHOLD = 9000;
+    // Upper bound on concurrently-active loans per position. Health-factor and
+    // liquidation checks walk `s_positionActiveLoanIds` linearly, so an
+    // unbounded array lets an attacker bloat the O(N) loop until liquidation
+    // exceeds the block gas limit (permanent unliquidatability → bad debt).
+    // Capping N keeps that loop's worst-case cost constant.
+    uint256 constant MAX_ACTIVE_LOANS_PER_POSITION = 50;
     uint16 constant COLLATERALIZATION_RATIO = 8000;
     uint16 constant MAX_UTILIZATION = 9000;
     uint256 constant PRECISION = 1e18;

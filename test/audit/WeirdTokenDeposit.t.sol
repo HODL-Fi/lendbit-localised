@@ -101,6 +101,7 @@ contract WeirdTokenDepositTest is Base {
     function test_fee_on_transfer_credits_received_not_nominal() public {
         FeeOnTransferToken fee = new FeeOnTransferToken();
         _deployVaultFor(address(fee));
+        TokenVault v = TokenVault(gettersF.getTokenVault(address(fee)));
 
         fee.mint(user1, 1_000e6);
         vm.startPrank(user1);
@@ -108,9 +109,13 @@ contract WeirdTokenDepositTest is Base {
         vaultManagerF.deposit(address(fee), 1_000e6);
         vm.stopPrank();
 
-        // 1% fee on the user->diamond transfer → totalDeposits credits the
-        // received 990, not the nominal 1,000 (no over-count of liquidity).
-        assertEq(vaultManagerF.getTokenVaultConfig(address(fee)).totalDeposits, 990e6);
+        // The token charges 1% on EACH hop: 1,000 → 990 (user→diamond) → 980.1
+        // (diamond→vault). `totalDeposits` must credit what the VAULT actually
+        // holds (980.1), not the diamond's first-hop receipt (990) — otherwise the
+        // utilization cap is measured against liquidity that isn't there (#4).
+        uint256 _totalDeposits = vaultManagerF.getTokenVaultConfig(address(fee)).totalDeposits;
+        assertEq(_totalDeposits, 980_100_000, "credits the vault's real second-hop receipt");
+        assertEq(_totalDeposits, fee.balanceOf(address(v)), "totalDeposits == actual vault balance (no over-count)");
     }
 
     /// @notice #5: the vault mints shares from what it ACTUALLY receives on the

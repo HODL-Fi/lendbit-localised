@@ -41,8 +41,74 @@ library LibPositionManager {
 
         delete s.s_ownerPosition[_oldAddress];
         delete s.isWhitelisted[_oldAddress];
+        // Any completed transfer (accepted pull OR admin force-transfer) clears a
+        // stale pending proposal so it can never be replayed against a new owner.
+        delete s.s_pendingPositionTransfer[_positionId];
 
         emit PositionIdTransferred(_positionId, _oldAddress, _newAddress);
+    }
+
+    /// @notice Step 1 of a two-step transfer: `_from` proposes handing its position to `_newAddress`.
+    /// @dev Records the proposal only; ownership does not move until the recipient accepts. Both
+    ///      addresses must be whitelisted and `_newAddress` must not already own a position. These
+    ///      preconditions are re-checked at accept time, when they are authoritative.
+    /// @param _from The current owner initiating the transfer (the caller).
+    /// @param _newAddress The proposed recipient.
+    /// @return _positionId The position proposed for transfer.
+    function _initiatePositionTransfer(LibAppStorage.StorageLayout storage s, address _from, address _newAddress)
+        internal
+        returns (uint256 _positionId)
+    {
+        _positionId = _validateUserExists(s, _from);
+        _addressIsWhitelisted(s, _from);
+        _addressIsWhitelisted(s, _newAddress);
+        if (_userAddressExists(s, _newAddress)) revert ADDRESS_EXISTS(_newAddress);
+
+        s.s_pendingPositionTransfer[_positionId] = _newAddress;
+
+        emit PositionTransferInitiated(_positionId, _from, _newAddress);
+    }
+
+    /// @notice Step 2 of a two-step transfer: the proposed recipient accepts and pulls the position.
+    /// @dev Reverts unless a proposal for `_positionId` exists and names `_caller`. Delegates to
+    ///      `_transferPositionId`, which re-validates all preconditions and clears the proposal.
+    /// @param _positionId The position being accepted.
+    /// @param _caller The recipient accepting the transfer (the caller).
+    /// @return The transferred position ID.
+    function _acceptPositionTransfer(LibAppStorage.StorageLayout storage s, uint256 _positionId, address _caller)
+        internal
+        returns (uint256)
+    {
+        address _pending = s.s_pendingPositionTransfer[_positionId];
+        if (_pending == address(0)) revert NO_PENDING_TRANSFER(_positionId);
+        if (_pending != _caller) revert NOT_PENDING_RECIPIENT(_caller);
+
+        address _from = _getUserForPositionId(s, _positionId);
+        return _transferPositionId(s, _from, _caller);
+    }
+
+    /// @notice Cancels a pending transfer proposal for the caller's position.
+    /// @param _from The current owner cancelling the proposal (the caller).
+    /// @return _positionId The position whose proposal was cleared.
+    function _cancelPositionTransfer(LibAppStorage.StorageLayout storage s, address _from)
+        internal
+        returns (uint256 _positionId)
+    {
+        _positionId = _validateUserExists(s, _from);
+        if (s.s_pendingPositionTransfer[_positionId] == address(0)) revert NO_PENDING_TRANSFER(_positionId);
+
+        delete s.s_pendingPositionTransfer[_positionId];
+
+        emit PositionTransferCancelled(_positionId, _from);
+    }
+
+    /// @notice Returns the pending recipient of a position transfer (address(0) if none).
+    function _getPendingPositionTransfer(LibAppStorage.StorageLayout storage s, uint256 _positionId)
+        internal
+        view
+        returns (address)
+    {
+        return s.s_pendingPositionTransfer[_positionId];
     }
 
     /// @notice Marks `_user` as whitelisted.

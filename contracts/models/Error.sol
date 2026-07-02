@@ -37,9 +37,16 @@ error NO_ACTIVE_BORROW_FOR_TOKEN(uint256 positionId, address token);
 error NO_COLLATERAL_FOR_TOKEN(uint256 positionId, address token);
 error NOT_LOAN_OWNER(uint256 positionId);
 error ADDRESS_NOT_WHITELISTED(address caller);
+error NOT_KEEPER(address caller);
 error TENURE_TOO_SHORT();
+error TOO_MANY_ACTIVE_LOANS(uint256 positionId);
+error NO_PENDING_TRANSFER(uint256 positionId);
+error NOT_PENDING_RECIPIENT(address caller);
+error COLLATERAL_STILL_IN_USE(address token);
 
 error LTV_BELOW_TEN_PERCENT();
+error LTV_ABOVE_LIQUIDATION_THRESHOLD(uint16 ltv, uint16 threshold);
+error UNAUTHORIZED_POSITION_CREATION(address caller);
 error TOKEN_OVERUTILIZATION();
 error NO_OUTSTANDING_DEBT(uint256 positionId, address token);
 error REPAYMENT_BELOW_INTEREST(uint256 amount, uint256 interestDue);

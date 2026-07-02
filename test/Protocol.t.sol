@@ -16,6 +16,7 @@ import "../contracts/Diamond.sol";
 import "../contracts/models/Protocol.sol";
 import "../contracts/models/Error.sol";
 import "../contracts/models/Event.sol";
+import {Constants} from "../contracts/models/Constant.sol";
 import {Base} from "./Base.t.sol";
 import {TokenVault} from "../contracts/TokenVault.sol";
 
@@ -100,6 +101,25 @@ contract ProtocolTest is Base {
             }
         }
         assertFalse(found, "Token should be removed from collateral tokens array");
+    }
+
+    function testRemoveCollateralTokenBlockedWhileHeld() public {
+        // Finding #7: delisting a collateral token while positions still hold it
+        // zeroes its valuation and makes solvent users liquidatable. Removal must
+        // be blocked until the outstanding balance is withdrawn.
+        uint256 _amount = 5 ether;
+        depositCollateralFor(user1, address(token1), _amount);
+
+        vm.expectRevert(abi.encodeWithSelector(COLLATERAL_STILL_IN_USE.selector, address(token1)));
+        protocolF.removeCollateralToken(address(token1));
+
+        // Once the user exits the token, removal succeeds.
+        vm.startPrank(user1);
+        protocolF.withdrawCollateral(address(token1), _amount);
+        vm.stopPrank();
+
+        protocolF.removeCollateralToken(address(token1));
+        assertFalse(gettersF.isCollateralTokenSupported(address(token1)));
     }
 
     function testRemoveCollateralTokenFailsIfNotSecurityCouncil() public {
@@ -1041,6 +1061,42 @@ contract ProtocolTest is Base {
         vm.startPrank(user1);
         vm.expectRevert(abi.encodeWithSelector(TOKEN_NOT_SUPPORTED.selector, address(token3)));
         protocolF.takeLoan(address(token3), 1000 * 1e18, 30 days);
+        vm.stopPrank();
+    }
+
+    function testTakeLoanFailsForZeroPrincipal() public {
+        // Create position first
+        positionManagerF.createPositionFor(user1);
+
+        // A zero-principal loan would be pushed FULFILLED and can never be
+        // repaid/liquidated, permanently bloating s_positionActiveLoanIds and the
+        // O(N) health/liquidation loop. It must revert like _requestBorrow does.
+        vm.startPrank(user1);
+        vm.expectRevert(abi.encodeWithSelector(AMOUNT_ZERO.selector));
+        protocolF.takeLoan(address(token4), 0, 30 days);
+        vm.stopPrank();
+    }
+
+    function testTakeLoanRevertsAboveActiveLoanCap() public {
+        // Loans past the cap would bloat the O(N) s_positionActiveLoanIds loop
+        // that health/liquidation checks walk, enabling a liquidation-gas DoS.
+        createVaultAndFund(1000000e18);
+        uint256 _collateralAmount = 10000 * 1e18; // ~$15M token1 collateral
+        token1.mint(user1, _collateralAmount);
+
+        vm.startPrank(user1);
+        token1.approve(address(diamond), _collateralAmount);
+        protocolF.depositCollateral(address(token1), _collateralAmount);
+
+        // Fill the position exactly to the cap with small active loans.
+        for (uint256 i = 0; i < Constants.MAX_ACTIVE_LOANS_PER_POSITION; i++) {
+            protocolF.takeLoan(address(token4), 1e6, 30 days);
+        }
+
+        // The next loan reverts once the cap is reached.
+        uint256 _positionId = positionManagerF.getPositionIdForUser(user1);
+        vm.expectRevert(abi.encodeWithSelector(TOO_MANY_ACTIVE_LOANS.selector, _positionId));
+        protocolF.takeLoan(address(token4), 1e6, 30 days);
         vm.stopPrank();
     }
 

@@ -35,7 +35,7 @@ contract CovFinalTest is Base {
         CovFinalRouter router = new CovFinalRouter();
         priceOracleF.setupRouter(bytes32("DON"), address(router), makeAddr("link"), 5);
         priceOracleF.setupSource("return 1");
-        positionManagerF.whitelistAddress(address(this));
+        priceOracleF.setKeeper(address(this), true);
 
         string[] memory args = new string[](2);
         args[0] = "a";

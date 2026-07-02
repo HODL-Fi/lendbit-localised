@@ -53,6 +53,16 @@ library LibYieldStrategy {
             revert BAD_POOL_ADDRESS(_pool);
         }
 
+        // Distribute any yield accrued under the CURRENT parameters before
+        // overwriting them. Reconfiguring an already-enabled token rebaselines
+        // `lastRecordedBalance` to the live aToken balance below; without accruing
+        // first, the (currentBalance − lastRecordedBalance) delta earned since the
+        // last touch is silently erased instead of credited to holders (see lead:
+        // reconfiguration skips checkpointing). No-ops for a fresh token
+        // (`_shouldProcess` is false until enabled). Uses the pre-existing config,
+        // so it must run before the fields are reassigned.
+        _accrueYield(s, _token);
+
         YieldStrategyConfig storage _config = s.s_yieldConfigs[_token];
         _config.enabled = true;
         _config.paused = false;

@@ -7,6 +7,10 @@ event PositionIdCreated(uint256 indexed positionId, address indexed user);
 
 event PositionIdTransferred(uint256 indexed positionId, address indexed oldAddress, address indexed newAddress);
 
+event PositionTransferInitiated(uint256 indexed positionId, address indexed from, address indexed to);
+
+event PositionTransferCancelled(uint256 indexed positionId, address indexed from);
+
 event SecurityCouncilSet(address _newCouncil);
 
 event TokenAdded(address indexed asset, address indexed assetVault);
@@ -72,6 +76,10 @@ event Response(bytes32 indexed requestId, uint256 priceData, bytes response, byt
 event FunctionsRouterChanged(address indexed securityCouncil, bytes32 donId, address router);
 
 event FunctionsSourceChanged(address indexed securityCouncil, bytes source);
+
+event KeeperSet(address indexed keeper, bool status);
+
+event CollateralLiquidationThresholdSet(address indexed token, uint16 oldThreshold, uint16 newThreshold);
 
 // Vault risk/rate parameter updates
 event ReserveFactorSet(address indexed token, uint16 reserveFactor);

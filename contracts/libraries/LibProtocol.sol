@@ -55,6 +55,7 @@ library LibProtocol {
         }
 
         s.s_positionCollateral[_positionId][_token] += _creditedAmount;
+        s.s_totalCollateralDeposited[_token] += _creditedAmount;
 
         LibYieldStrategy._rebalancePosition(s, _positionId, _token);
         emit CollateralDeposited(_positionId, _token, _creditedAmount);
@@ -71,6 +72,7 @@ library LibProtocol {
         if (s.s_positionCollateral[_positionId][_token] < _amount) revert INSUFFICIENT_BALANCE();
 
         s.s_positionCollateral[_positionId][_token] -= _amount;
+        s.s_totalCollateralDeposited[_token] -= _amount;
         uint256 _healthFactor = _getHealthFactor(s, _positionId, 0);
 
         uint256 _debtValue = _getPositionBorrowedValue(s, _positionId) + _totalActiveDebt(s, _positionId);
@@ -100,6 +102,7 @@ library LibProtocol {
         uint256 _tenureSeconds
     ) internal returns (uint256) {
         uint256 _positionId = _positionIdCheck(s);
+        if (_principal == 0) revert AMOUNT_ZERO();
         if (!s.s_supportedToken[_token]) revert TOKEN_NOT_SUPPORTED(_token);
         if (_tenureSeconds < Constants.ONE_DAY) revert TENURE_TOO_SHORT();
         if (!s._validateVaultUtlization(_token, _principal)) revert TOKEN_OVERUTILIZATION();
@@ -120,6 +123,10 @@ library LibProtocol {
             status: LoanStatus.FULFILLED
         });
 
+        if (s.s_positionActiveLoanIds[_positionId].length >= Constants.MAX_ACTIVE_LOANS_PER_POSITION) {
+            revert TOO_MANY_ACTIVE_LOANS(_positionId);
+        }
+
         uint256 _loanId = ++s.s_nextLoanId;
         s.s_loans[_loanId] = _loan;
         s.s_positionActiveLoanIds[_positionId].push(_loanId);
@@ -129,7 +136,7 @@ library LibProtocol {
         s._updateVaultBorrows(_loan.token, _loan.principal);
 
         TokenVault _vault = s.i_tokenVault[_loan.token];
-        _vault.borrow(msg.sender, _loan.principal);
+        _vault.borrowFixed(msg.sender, _loan.principal, _loan.annualRateBps);
 
         emit LoanTaken(_positionId, _loanId, _loan.token, _loan.principal, _loan.tenureSeconds, _loan.annualRateBps);
         return _loanId;
@@ -161,6 +168,12 @@ library LibProtocol {
             revert POSITION_ID_MISMATCH(_storedPositionId, _request.positionId);
         }
 
+        // Honour an on-chain blacklist even for a pre-signed request: a wallet
+        // removed from the whitelist after its request was signed can no longer
+        // draw vault funds (defence-in-depth, mirrors the local borrow path's
+        // `_callerWhitelisted`). See finding #6.
+        if (!s.isWhitelisted[_request.wallet]) revert ADDRESS_NOT_WHITELISTED(_request.wallet);
+
         if (_request.targetChainId != block.chainid) {
             revert REQUEST_BORROW_TARGET_CHAIN_MISMATCH(block.chainid, _request.targetChainId);
         }
@@ -185,10 +198,18 @@ library LibProtocol {
 
         _verifyBorrowSignature(s, _request, _signature);
 
-        if (s.s_requestBorrowNonceUsed[_request.contractAddress][_request.nonce]) {
+        // Key replay protection by the borrowing WALLET, not `contractAddress`
+        // (which is pinned to `address(this)` and so is a single global namespace).
+        // A global namespace couples unrelated wallets: if the signer issues
+        // wallet-local nonces, one wallet consuming nonce N blocks every other
+        // wallet's legitimate nonce-N request (#7). Per-wallet keying makes each
+        // wallet's nonce sequence independent while still preventing replay of the
+        // same (wallet, nonce) — the signature binds the wallet, so this cannot be
+        // spoofed.
+        if (s.s_requestBorrowNonceUsed[_request.wallet][_request.nonce]) {
             revert REQUEST_BORROW_NONCE_USED(_request.wallet, _request.nonce);
         }
-        s.s_requestBorrowNonceUsed[_request.contractAddress][_request.nonce] = true;
+        s.s_requestBorrowNonceUsed[_request.wallet][_request.nonce] = true;
 
         Loan memory _loan = Loan({
             positionId: _request.positionId,
@@ -201,6 +222,10 @@ library LibProtocol {
             penaltyRateBps: s.s_penaltyRate,
             status: LoanStatus.FULFILLED
         });
+
+        if (s.s_positionActiveLoanIds[_request.positionId].length >= Constants.MAX_ACTIVE_LOANS_PER_POSITION) {
+            revert TOO_MANY_ACTIVE_LOANS(_request.positionId);
+        }
 
         uint256 _loanId = ++s.s_nextLoanId;
         s.s_loans[_loanId] = _loan;
@@ -216,7 +241,7 @@ library LibProtocol {
         s._updateVaultBorrows(_loan.token, _loan.principal);
 
         TokenVault _vault = s.i_tokenVault[_loan.token];
-        _vault.borrow(_request.wallet, _loan.principal);
+        _vault.borrowFixed(_request.wallet, _loan.principal, _loan.annualRateBps);
 
         emit LoanTaken(
             _request.positionId, _loanId, _loan.token, _loan.principal, _loan.tenureSeconds, _loan.annualRateBps
@@ -327,7 +352,7 @@ library LibProtocol {
         if (_received != _amount) revert AMOUNT_MISMATCH(_received, _amount);
 
         s._updateVaultRepays(_loan.token, _principalRepaid);
-        _vault.repay(_principalRepaid, _amount - _principalRepaid);
+        _vault.repayFixed(_principalRepaid, _amount - _principalRepaid, _loan.annualRateBps);
 
         emit LoanRepayment(_positionId, _loanId, _loan.token, _amount);
         return _loan.principal;
@@ -361,6 +386,7 @@ library LibProtocol {
         returns (uint256)
     {
         uint256 _positionId = _positionIdCheck(s);
+        if (_amount == 0) revert AMOUNT_ZERO();
         if (!s.s_supportedToken[_token]) revert TOKEN_NOT_SUPPORTED(_token);
         if (!s._validateVaultUtlization(_token, _amount)) revert TOKEN_OVERUTILIZATION();
 
@@ -497,12 +523,25 @@ library LibProtocol {
         if (_token == address(0)) revert ADDRESS_ZERO();
         if (_pricefeed == address(0)) revert ADDRESS_ZERO();
         if (_tokenLTV < 1000) revert LTV_BELOW_TEN_PERCENT();
+        // The LTV (origination borrow limit) must never exceed the liquidation
+        // threshold, or a position could borrow up to `LTV·C` and land instantly
+        // above the `threshold·C` liquidation trigger — a healthy max-borrow
+        // position that is immediately liquidatable (#2). At onboarding the
+        // threshold is the protocol default (90%), so bound the LTV to it here; the
+        // threshold setter enforces the same invariant from the other direction.
+        if (_tokenLTV > Constants.LIQUIDATION_THRESHOLD) {
+            revert LTV_ABOVE_LIQUIDATION_THRESHOLD(_tokenLTV, Constants.LIQUIDATION_THRESHOLD);
+        }
         if (s.s_supportedCollateralTokens[_token]) revert TOKEN_ALREADY_SUPPORTED_AS_COLLATERAL(_token);
 
         s.s_supportedCollateralTokens[_token] = true;
         s.s_allCollateralTokens.push(_token);
         s.s_tokenPriceFeed[_token] = _pricefeed;
         s.s_collateralTokenLTV[_token] = _tokenLTV;
+        // Default the per-collateral liquidation threshold to the protocol default
+        // (90%), preserving the historical flat-90%-of-raw behaviour until
+        // governance tunes it per asset via `_setCollateralLiquidationThreshold`.
+        s.s_collateralLiquidationThreshold[_token] = Constants.LIQUIDATION_THRESHOLD;
 
         emit CollateralTokenAdded(_token);
         emit CollateralTokenLTVUpdated(_token, 0, _tokenLTV);
@@ -515,6 +554,12 @@ library LibProtocol {
     function _removeCollateralToken(LibAppStorage.StorageLayout storage s, address _token) internal {
         if (_token == address(0)) revert ADDRESS_ZERO();
         if (!s.s_supportedCollateralTokens[_token]) revert TOKEN_NOT_SUPPORTED_AS_COLLATERAL(_token);
+        // Refuse to delist while positions still hold this collateral. Removing it
+        // from `s_allCollateralTokens` makes the valuation loops count outstanding
+        // holdings as zero USD, dropping solvent positions below the liquidation
+        // threshold and letting public liquidators seize the (still price-fed)
+        // collateral. Users must exit the token first.
+        if (s.s_totalCollateralDeposited[_token] != 0) revert COLLATERAL_STILL_IN_USE(_token);
 
         s.s_supportedCollateralTokens[_token] = false;
         // delete s.s_tokenPriceFeed[_token];
@@ -569,11 +614,82 @@ library LibProtocol {
         if (_token == address(0)) revert ADDRESS_ZERO();
         if (_tokenNewLTV < 1000) revert LTV_BELOW_TEN_PERCENT();
         if (!s.s_supportedCollateralTokens[_token]) revert TOKEN_NOT_SUPPORTED_AS_COLLATERAL(_token);
+        // Keep LTV <= the token's effective liquidation threshold (#2). Without this
+        // an admin could raise a token's LTV above its (possibly per-asset tuned)
+        // threshold and let borrowers open positions that are liquidatable on
+        // origination. Compared against the live effective threshold, so it composes
+        // with `_setCollateralLiquidationThreshold`.
+        uint16 _effectiveThreshold = _getCollateralLiquidationThreshold(s, _token);
+        if (_tokenNewLTV > _effectiveThreshold) {
+            revert LTV_ABOVE_LIQUIDATION_THRESHOLD(_tokenNewLTV, _effectiveThreshold);
+        }
 
         uint16 _oldLTV = s.s_collateralTokenLTV[_token];
         s.s_collateralTokenLTV[_token] = _tokenNewLTV;
 
         emit CollateralTokenLTVUpdated(_token, _oldLTV, _tokenNewLTV);
+    }
+
+    /// @notice Set a collateral token's liquidation threshold in basis points.
+    /// @dev The threshold is the debt-to-collateral ratio at which the position
+    ///      becomes liquidatable. It MUST be >= the token's LTV (so a healthy
+    ///      max-borrow position is never immediately liquidatable) and <= 100%
+    ///      (so `threshold + liquidationBonus` stays within the collateral value).
+    /// @param s The diamond storage layout.
+    /// @param _token Collateral token to configure.
+    /// @param _threshold New liquidation threshold in basis points.
+    function _setCollateralLiquidationThreshold(
+        LibAppStorage.StorageLayout storage s,
+        address _token,
+        uint16 _threshold
+    ) internal {
+        if (_token == address(0)) revert ADDRESS_ZERO();
+        if (!s.s_supportedCollateralTokens[_token]) revert TOKEN_NOT_SUPPORTED_AS_COLLATERAL(_token);
+        if (_threshold < s.s_collateralTokenLTV[_token] || _threshold > Constants.BASIS_POINTS_SCALE) {
+            revert BAD_RATE();
+        }
+
+        uint16 _old = s.s_collateralLiquidationThreshold[_token];
+        s.s_collateralLiquidationThreshold[_token] = _threshold;
+
+        emit CollateralLiquidationThresholdSet(_token, _old, _threshold);
+    }
+
+    /// @notice The effective liquidation threshold for a collateral token.
+    /// @dev Falls back to the protocol default (`LIQUIDATION_THRESHOLD`) when unset
+    ///      (a zero entry), so pre-configuration collaterals behave as before.
+    function _getCollateralLiquidationThreshold(LibAppStorage.StorageLayout storage s, address _token)
+        internal
+        view
+        returns (uint16)
+    {
+        uint16 _threshold = s.s_collateralLiquidationThreshold[_token];
+        return _threshold == 0 ? uint16(Constants.LIQUIDATION_THRESHOLD) : _threshold;
+    }
+
+    /// @notice Threshold-weighted USD value of a position's collateral — the debt
+    ///         ceiling above which the position is liquidatable.
+    /// @dev Each collateral's raw USD value is scaled by its effective liquidation
+    ///      threshold (per-asset, defaulting to 90%). Mirrors
+    ///      `_getPositionUtilizableCollateralValue` but with the liquidation
+    ///      threshold instead of the LTV.
+    /// @param s The diamond storage layout.
+    /// @param _positionId The position to evaluate.
+    /// @return The threshold-weighted collateral value.
+    function _getPositionLiquidationThresholdValue(LibAppStorage.StorageLayout storage s, uint256 _positionId)
+        internal
+        view
+        returns (uint256)
+    {
+        uint256 _totalValue = 0;
+        address[] memory _tokens = s.s_allCollateralTokens;
+        for (uint256 i = 0; i < _tokens.length; i++) {
+            address _token = _tokens[i];
+            uint16 _threshold = _getCollateralLiquidationThreshold(s, _token);
+            uint256 _usdValue = _getPositionCollateralTokenValue(s, _positionId, _token);
+            _totalValue += (_usdValue * _threshold) / Constants.BASIS_POINTS_SCALE;
+        }
+        return _totalValue;
     }
 
     /*
@@ -834,6 +950,11 @@ library LibProtocol {
         if (_amount == 0) revert AMOUNT_ZERO();
         if (_token == Constants.NATIVE_TOKEN) {
             if (msg.value != _amount) revert AMOUNT_MISMATCH(msg.value, _amount);
+        } else if (msg.value != 0) {
+            // The collateral entrypoint is `payable` for the native path; reject ETH
+            // sent alongside an ERC20 deposit so it can't be silently trapped in the
+            // diamond (see lead: ERC20 deposit traps ETH).
+            revert AMOUNT_MISMATCH(msg.value, 0);
         }
     }
 

@@ -6,7 +6,7 @@ import {FunctionsRequest} from "@chainlink/contracts/src/v0.8/functions/v1_0_0/l
 import {LibAppStorage} from "../libraries/LibAppStorage.sol";
 import {LibDiamond} from "../libraries/LibDiamond.sol";
 import {LibPriceOracle} from "../libraries/LibPriceOracle.sol";
-import {ADDRESS_NOT_WHITELISTED} from "../models/Error.sol";
+import {NOT_KEEPER} from "../models/Error.sol";
 
 /// @title PriceOracleFacet — Chainlink price-feed reads and Chainlink Functions oracle administration
 contract PriceOracleFacet {
@@ -89,10 +89,13 @@ contract PriceOracleFacet {
      */
     function sendRequest(uint64 subscriptionId, string[] calldata args) external returns (bytes32 requestId) {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
-        // Refresh is keeper-triggered: only whitelisted keepers may bill the
-        // protocol's LINK subscription, and the caller-supplied id is ignored in
-        // favour of the protocol's own subscription so it can never be redirected.
-        if (!s.isWhitelisted[msg.sender]) revert ADDRESS_NOT_WHITELISTED(msg.sender);
+        // Refresh is keeper-triggered: only addresses on the dedicated keeper
+        // allowlist may bill the protocol's LINK subscription. This is kept
+        // separate from `isWhitelisted` (the general borrower/depositor gate) so
+        // ordinary users can never spend the subscription. The caller-supplied id
+        // is ignored in favour of the protocol's own subscription so it can never
+        // be redirected.
+        if (!s.s_isKeeper[msg.sender]) revert NOT_KEEPER(msg.sender);
         subscriptionId = s.s_subscriptionId;
 
         FunctionsRequest.Request memory req;
@@ -132,7 +135,24 @@ contract PriceOracleFacet {
         s._setSubscriptionId(_subId);
     }
 
+    /// @notice Authorizes or revokes a keeper allowed to trigger protocol-funded price refreshes via sendRequest; owner only.
+    /// @param _keeper The keeper address to update.
+    /// @param _status True to authorize the keeper, false to revoke.
+    function setKeeper(address _keeper, bool _status) external {
+        LibDiamond.enforceIsContractOwner();
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        s._setKeeper(_keeper, _status);
+    }
+
     // Getter functions
+
+    /// @notice Returns whether `_keeper` is authorized to trigger protocol-funded price refreshes.
+    /// @param _keeper The address to query.
+    /// @return True if the address is an authorized keeper.
+    function isKeeper(address _keeper) external view returns (bool) {
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        return s.s_isKeeper[_keeper];
+    }
 
     /// @notice Returns the currently configured Chainlink Functions subscription id.
     /// @return The stored subscription id.

@@ -15,7 +15,6 @@ import {Constants} from "../models/Constant.sol";
 import "../models/Error.sol";
 import "../models/Event.sol";
 import "../models/Protocol.sol";
-import {RepayStateChangeParams} from "../models/FunctionParams.sol";
 import {TokenVault} from "../TokenVault.sol";
 
 /// @title LibLiquidation — health checks and liquidation of undercollateralized positions
@@ -31,11 +30,11 @@ library LibLiquidation {
     /// @param _positionId The position to check.
     /// @return True if the position can be liquidated.
     function _isLiquidatable(LibAppStorage.StorageLayout storage s, uint256 _positionId) internal view returns (bool) {
-        uint256 _collateral = s._getPositionCollateralValue(_positionId);
         uint256 _debt = s._getPositionBorrowedValue(_positionId) + s._totalActiveDebt(_positionId);
-        uint256 _threshold = _collateral * Constants.LIQUIDATION_THRESHOLD / Constants.BASIS_POINTS_SCALE_256;
-        // uint256 _healthFactor = s._getHealthFactor(_positionId, 0);
-        // return _healthFactor < 1e18;
+        // Per-asset liquidation threshold (defaults to the flat 90% of raw for any
+        // token governance hasn't tuned), so a volatile collateral can be given an
+        // earlier trigger without touching stable-collateral behaviour.
+        uint256 _threshold = s._getPositionLiquidationThresholdValue(_positionId);
         return _debt > _threshold;
     }
 
@@ -59,40 +58,57 @@ library LibLiquidation {
         if (_loan.status != LoanStatus.FULFILLED) revert INACTIVE_LOAN();
         _liquidationCheck(s, _loan.positionId, _loan.token, _collateralToken, _amount);
 
-        // Update loan repaid amount
+        // Clamp the requested repayment to the loan's total outstanding balance.
         uint256 _loanDebt = s._outstandingBalance(_loanId, block.timestamp);
 
         if (_amount > _loanDebt) {
             _amount = _loanDebt;
         }
 
+        uint256 _collateralHeld = s.s_positionCollateral[_loan.positionId][_collateralToken];
         uint256 _amountToLiquidate = _getAmountToLiquidate(s, _collateralToken, _loan.token, _amount);
-        if (_amountToLiquidate > s.s_positionCollateral[_loan.positionId][_collateralToken]) {
-            revert INSUFFICIENT_COLLATERAL();
-        }
 
-        s.s_positionCollateral[_loan.positionId][_collateralToken] -= _amountToLiquidate;
-        LibYieldStrategy._rebalanceForWithdrawal(s, _loan.positionId, _collateralToken, _amountToLiquidate);
+        // Cap the seizure to the collateral actually available instead of
+        // reverting. A deeply-overdue loan can accrue penalty whose bonus-adjusted
+        // seizure exceeds the remaining collateral; reverting there left the loan
+        // permanently un-liquidatable, so its principal became bad debt (#4a).
+        // Scale the repayment down proportionally so it only pays for the
+        // collateral that can actually be seized.
+        if (_amountToLiquidate > _collateralHeld) {
+            _amount = (_amount * _collateralHeld) / _amountToLiquidate;
+            _amountToLiquidate = _collateralHeld;
+        }
 
         uint256 _oldPrincipal = _loan.principal;
 
-        // interest-first allocation, principal reduced by the principal portion
-        // only (never fold interest into principal: #12). The pool borrow tally
-        // and vault are then decremented by that exact principal.
-        uint256 _interestDue = _loanDebt - _oldPrincipal;
+        // Pro-rata allocation across principal and interest/penalty. Every
+        // liquidation retires a positive slice of principal, so a liquidator can
+        // no longer repeatedly seize collateral as interest-only while principal
+        // (and its regenerating penalty) survives (#4b). Interest is never folded
+        // into principal (#12): `_loan.principal` only ever decreases here.
+        uint256 _principalRepaid = (_amount * _oldPrincipal) / _loanDebt;
+        // A liquidation must make real progress on principal. A dust repayment
+        // whose principal slice rounds to zero would reset `startTimestamp` (the
+        // interest anchor) while repaying nothing — the wiped-interest footgun the
+        // old interest floor guarded against (#3). Reject it.
+        if (_principalRepaid == 0) revert AMOUNT_ZERO();
 
-        // A liquidation payment must at least cover the accrued interest + penalty.
-        // Otherwise a dust liquidation resets `startTimestamp` below (moving the
-        // interest anchor to now) while repaying no principal — wiping unpaid
-        // fixed-loan interest while the principal remains (#3).
-        if (_amount < _interestDue) revert REPAYMENT_BELOW_INTEREST(_amount, _interestDue);
-
-        uint256 _principalRepaid = _amount > _interestDue ? _amount - _interestDue : 0;
+        s.s_positionCollateral[_loan.positionId][_collateralToken] -= _amountToLiquidate;
+        s.s_totalCollateralDeposited[_collateralToken] -= _amountToLiquidate;
+        LibYieldStrategy._rebalanceForWithdrawal(s, _loan.positionId, _collateralToken, _amountToLiquidate);
 
         // update outstanding loan here
         _loan.repaid += _amount;
         _loan.principal = _oldPrincipal - _principalRepaid;
-        _loan.startTimestamp = block.timestamp;
+        // Do NOT reset the interest anchor on a pro-rata partial liquidation.
+        // Base interest is linear in principal and keyed on `startTimestamp`, so
+        // resetting it here would forgive the accrued (but unpaid) interest on the
+        // surviving principal and strand the matching LP receivable in the vault's
+        // `totalAccruedInterest`, overstating share price (#2). Keeping the anchor
+        // makes `_outstandingBalance` return exactly the correct unpaid interest on
+        // the remaining principal. On full repayment `principal == 0` and the loan
+        // closes, so the anchor is moot. (The penalty clock is separately anchored
+        // to the immutable `s_loanStartTime`, so it is unaffected either way.)
 
         // If fully repaid, update loan status and move to closed loans
         if (_loan.principal == 0) {
@@ -110,7 +126,7 @@ library LibLiquidation {
         IERC20(_loan.token).safeTransferFrom(msg.sender, address(_tokenVault), _amount);
         uint256 _received = IERC20(_loan.token).balanceOf(address(_tokenVault)) - _before;
         if (_received != _amount) revert AMOUNT_MISMATCH(_received, _amount);
-        _tokenVault.repay(_principalRepaid, _amount - _principalRepaid);
+        _tokenVault.repayFixed(_principalRepaid, _amount - _principalRepaid, _loan.annualRateBps);
 
         LibProtocol._transferToken(_collateralToken, msg.sender, _amountToLiquidate);
 
@@ -120,9 +136,10 @@ library LibLiquidation {
 
     /// @notice Liquidate a position's open-ended token debt, repaying `_amount` and
     ///         seizing the equivalent (bonus-adjusted) collateral for the liquidator.
-    /// @dev Reverts if the position has no borrow for `_token`; applies the
-    ///      principal/interest split via `_repayStateChanges`, pulls the repayment
-    ///      into the vault, and transfers the seized collateral to `msg.sender`.
+    /// @dev Reverts if the position has no borrow for `_token`; allocates the
+    ///      repayment pro-rata across principal and interest (every liquidation
+    ///      must retire principal — no interest-only collateral skim), pulls the
+    ///      repayment into the vault, and transfers the seized collateral to `msg.sender`.
     /// @param s The diamond storage layout.
     /// @param _positionId The position being liquidated.
     /// @param _amount The debt amount the liquidator repays.
@@ -140,17 +157,50 @@ library LibLiquidation {
         }
         _liquidationCheck(s, _positionId, _token, _collateralToken, _amount);
 
-        uint256 _amountToLiquidate = _getAmountToLiquidate(s, _collateralToken, _token, _amount);
-        if (_amountToLiquidate > s.s_positionCollateral[_positionId][_collateralToken]) {
-            revert INSUFFICIENT_COLLATERAL();
+        // Clamp the repayment to the position's outstanding debt (prevents the
+        // `_totalDebt - _amount` underflow on an over-sized `_amount`).
+        uint256 _totalDebt = s._calculateUserDebt(_positionId, _token, 0);
+        if (_amount > _totalDebt) {
+            _amount = _totalDebt;
         }
 
-        s.s_positionCollateral[_positionId][_collateralToken] -= _amountToLiquidate;
+        uint256 _collateralHeld = s.s_positionCollateral[_positionId][_collateralToken];
+        uint256 _amountToLiquidate = _getAmountToLiquidate(s, _collateralToken, _token, _amount);
+
+        // Cap the seizure to the collateral actually available and scale the
+        // repayment down proportionally, mirroring `_liquidateLoan` (#4a). Reverting
+        // when the bonus-adjusted seizure exceeds the remaining collateral left a
+        // deeply-underwater position liquidatable only by a liquidator who
+        // pre-computes the exact maximum `_amount`; every other call reverted
+        // `INSUFFICIENT_COLLATERAL`, so the collateral could strand as bad debt.
+        // Capping lets any liquidation seize what collateral remains and retire the
+        // matching principal slice.
+        if (_amountToLiquidate > _collateralHeld) {
+            _amount = (_amount * _collateralHeld) / _amountToLiquidate;
+            _amountToLiquidate = _collateralHeld;
+        }
+
+        // Pro-rata principal allocation, mirroring `_liquidateLoan`. Interest-first
+        // accounting here let a liquidator repay only accrued interest, seize bonus
+        // collateral, and leave principal (and the vault borrow tally) untouched —
+        // repeatable each block as interest re-accrues, draining collateral while
+        // principal survives as bad debt (#1). Requiring a positive principal slice
+        // makes every liquidation retire principal. `_repayStateChanges` keeps its
+        // interest-first behaviour for ordinary `_repay`, which must not revert on
+        // an interest-only user repayment.
+        uint256 _principalOutstanding = s.s_positionPrincipal[_positionId][_token];
+        uint256 _principalRepaid = (_amount * _principalOutstanding) / _totalDebt;
+        if (_principalRepaid == 0) revert AMOUNT_ZERO();
+
+        s.s_positionCollateral[_positionId][_collateralToken] = _collateralHeld - _amountToLiquidate;
+        s.s_totalCollateralDeposited[_collateralToken] -= _amountToLiquidate;
         LibYieldStrategy._rebalanceForWithdrawal(s, _positionId, _collateralToken, _amountToLiquidate);
 
-        RepayStateChangeParams memory _params =
-            RepayStateChangeParams({positionId: _positionId, token: _token, amount: _amount});
-        uint256 _principalRepaid = s._repayStateChanges(_params);
+        // Open-ended debt bookkeeping (mirrors `_repayStateChanges`, pro-rata split).
+        s.s_positionBorrowed[_positionId][_token] = _totalDebt - _amount;
+        s.s_positionBorrowedLastUpdate[_positionId][_token] = block.timestamp;
+        s.s_positionPrincipal[_positionId][_token] = _principalOutstanding - _principalRepaid;
+        LibVaultManager._updateVaultRepays(s, _token, _principalRepaid);
 
         TokenVault _tokenVault = s.i_tokenVault[_token];
         // Book against the amount actually received (fee-on-transfer safe, #6).

@@ -21,7 +21,8 @@ import {
     RequestSent,
     RequestFulfilled,
     FunctionsRouterChanged,
-    FunctionsSourceChanged
+    FunctionsSourceChanged,
+    KeeperSet
 } from "../models/Event.sol";
 import {FunctionResponse} from "../models/Protocol.sol";
 
@@ -113,8 +114,17 @@ library LibPriceOracle {
     {
         if (_amount == 0) return _usdValue;
 
-        // Scale the feed price up from its native decimals to PRECISION_SCALE (18)
-        uint256 scaledPrice = _price * (10 ** (Constants.PRECISION_SCALE - _feedDecimals));
+        // Scale the feed price to PRECISION_SCALE (18) decimals. A feed with MORE
+        // than 18 decimals would underflow `18 - _feedDecimals` (unsigned) and revert
+        // — permanently DoSing valuation (and therefore borrow/liquidation) for that
+        // token. Handle both directions so any feed decimals resolve safely. (See
+        // lead: feed-decimals underflow.)
+        uint256 scaledPrice;
+        if (_feedDecimals <= Constants.PRECISION_SCALE) {
+            scaledPrice = _price * (10 ** (Constants.PRECISION_SCALE - _feedDecimals));
+        } else {
+            scaledPrice = _price / (10 ** (_feedDecimals - Constants.PRECISION_SCALE));
+        }
         _usdValue = (scaledPrice * _amount) / (10 ** _decimals);
     }
 
@@ -198,9 +208,16 @@ library LibPriceOracle {
         if (!res.exists) {
             revert UnexpectedRequestID(_requestId); // Check if request IDs match
         }
-        // Update the contract's state variables with the response and any errors
+        // Update the contract's state variables with the response and any errors.
+        // The DON sets exactly one of (response, error): on the error path `_response`
+        // is empty, and `abi.decode("", (uint256))` reverts — which would revert the
+        // whole fulfillment BEFORE `res.err` is ever recorded, silently discarding the
+        // error and blocking the router callback. Only decode when a response is
+        // present; always persist the error. (See lead: error-before-store.)
         res.responses = _response;
-        (res.priceData) = abi.decode(_response, (uint256));
+        if (_response.length > 0) {
+            res.priceData = abi.decode(_response, (uint256));
+        }
         res.err = _err;
 
         // Emit an event to log the response
@@ -243,5 +260,13 @@ library LibPriceOracle {
     /// @param _subId The new subscription ID.
     function _setSubscriptionId(LibAppStorage.StorageLayout storage s, uint64 _subId) internal {
         s.s_subscriptionId = _subId;
+    }
+
+    /// @notice Adds or removes a keeper authorized to trigger protocol-funded Chainlink Functions refreshes.
+    /// @param _keeper The keeper address to update.
+    /// @param _status True to authorize the keeper, false to revoke.
+    function _setKeeper(LibAppStorage.StorageLayout storage s, address _keeper, bool _status) internal {
+        s.s_isKeeper[_keeper] = _status;
+        emit KeeperSet(_keeper, _status);
     }
 }

@@ -13,6 +13,8 @@ import "../contracts/facets/PriceOracleFacet.sol";
 import "../contracts/facets/ProtocolFacet.sol";
 import "../contracts/facets/PositionManagerFacet.sol";
 import "../contracts/facets/VaultManagerFacet.sol";
+import "../contracts/facets/YieldStrategyFacet.sol";
+import "../contracts/facets/GettersFacet.sol";
 import "../contracts/Diamond.sol";
 
 import {console} from "forge-std/console.sol";
@@ -29,6 +31,8 @@ contract Deployment is Script, IDiamondCut {
     VaultManagerFacet vaultManagerF;
     PriceOracleFacet priceOracleF;
     LiquidationFacet liquidationF;
+    YieldStrategyFacet yieldStrategyF;
+    GettersFacet gettersF;
 
     // Test tokens
     address token1;
@@ -66,6 +70,8 @@ contract Deployment is Script, IDiamondCut {
         vaultManagerF = new VaultManagerFacet();
         priceOracleF = new PriceOracleFacet();
         liquidationF = new LiquidationFacet();
+        yieldStrategyF = new YieldStrategyFacet();
+        gettersF = new GettersFacet();
 
         console.log("Deployed Addresses:");
         console.log("DiamondCutFacet: ", address(dCutFacet));
@@ -80,7 +86,7 @@ contract Deployment is Script, IDiamondCut {
 
         //upgrade diamond with facets
         //build cut struct
-        FacetCut[] memory cut = new FacetCut[](7);
+        FacetCut[] memory cut = new FacetCut[](9);
 
         cut[0] = (
             FacetCut({
@@ -138,11 +144,29 @@ contract Deployment is Script, IDiamondCut {
             })
         );
 
+        cut[7] = (
+            FacetCut({
+                facetAddress: address(yieldStrategyF),
+                action: FacetCutAction.Add,
+                functionSelectors: generateSelectors("YieldStrategyFacet")
+            })
+        );
+
+        cut[8] = (
+            FacetCut({
+                facetAddress: address(gettersF),
+                action: FacetCutAction.Add,
+                functionSelectors: generateSelectors("GettersFacet")
+            })
+        );
+
         protocolF = ProtocolFacet(address(diamond));
         positionManagerF = PositionManagerFacet(address(diamond));
         vaultManagerF = VaultManagerFacet(address(diamond));
         priceOracleF = PriceOracleFacet(address(diamond));
         liquidationF = LiquidationFacet(address(diamond));
+        yieldStrategyF = YieldStrategyFacet(address(diamond));
+        gettersF = GettersFacet(address(diamond));
 
         //upgrade diamond
         IDiamondCut(address(diamond)).diamondCut(cut, address(0x0), "");
@@ -170,6 +194,11 @@ contract Deployment is Script, IDiamondCut {
         // LPs still realize 20% on their deposit.
         protocolF.setInterestRate(2778, 500);
 
+        // The deployer must be whitelisted before it can own a position —
+        // `createPositionFor` reverts ADDRESS_NOT_WHITELISTED otherwise, which would
+        // abort the whole deploy (see lead: deployer not whitelisted before
+        // createPositionFor).
+        positionManagerF.whitelistAddress(msg.sender);
         positionManagerF.createPositionFor(msg.sender);
         ERC20Mock(token3).mint(msg.sender, 500000e6); // mint 500000 CNGN to msg.sender
         ERC20Mock(token3).approve(address(diamond), 500000e6);

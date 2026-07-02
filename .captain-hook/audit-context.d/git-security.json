@@ -1,0 +1,1109 @@
+{
+  "meta": {
+    "repo": "/Users/superdevfavour/work/hodl/lendbit-localised",
+    "src_dir": "contracts",
+    "generated_at": "2026-07-01T22:15:37.574776+00:00",
+    "git_head": "4a2b217",
+    "git_branch": "audit-remediation-readiness",
+    "total_commits": 77,
+    "total_source_files": 36,
+    "analysis_time_ms": 904
+  },
+  "repo_shape": {
+    "classification": "normal_dev",
+    "total_commits": 77,
+    "source_touching_commits": 68,
+    "bulk_import_sha": null,
+    "date_spread_days": 322,
+    "first_commit_date": "2025-08-13",
+    "last_commit_date": "2026-07-01",
+    "signals": [
+      "Date spread: 322 days",
+      "68 commits touch source files out of 77 total"
+    ]
+  },
+  "fix_candidates": [
+    {
+      "sha": "d3f4a48",
+      "full_sha": "d3f4a48dfc16a037dfe781efb7c853eb533f14b3",
+      "date": "2026-05-03",
+      "author": "Benjamin Faruna",
+      "subject": "fixed m-6: No Reentrancy Guard on Diamond Facets \u2014 External Calls in Core Operations Lack Safety Net",
+      "score": 17,
+      "reasons": [
+        "explicit security language",
+        "adds runtime guards (+1/-0)",
+        "tightens access control (+20/-0)",
+        "spans 6 security domains (access_control, fund_flows, liquidation, oracle_price, signatures, state_machines)"
+      ],
+      "source_files_touched": [
+        "contracts/facets/LiquidationFacet.sol",
+        "contracts/facets/PositionManagerFacet.sol",
+        "contracts/facets/ProtocolFacet.sol",
+        "contracts/facets/VaultManagerFacet.sol",
+        "contracts/facets/YieldStrategyFacet.sol",
+        "contracts/libraries/LibAppStorage.sol",
+        "contracts/libraries/SecurityBase.sol"
+      ],
+      "test_changed": false,
+      "lines_changed": 142
+    },
+    {
+      "sha": "99c700c",
+      "full_sha": "99c700c1a20add0ba8a6295e3617061c29dac7cf",
+      "date": "2026-07-01",
+      "author": "PhantomOz",
+      "subject": "fix: remediate 2026-07-01 review findings not covered by prior fixes",
+      "score": 16,
+      "reasons": [
+        "bug fix",
+        "adds runtime guards (+1/-0)",
+        "changes signature/auth handling",
+        "changes accounting/balance logic",
+        "spans 6 security domains (access_control, fund_flows, liquidation, oracle_price, signatures, state_machines)",
+        "focused change (3 source files)",
+        "includes test changes"
+      ],
+      "source_files_touched": [
+        "contracts/TokenVault.sol",
+        "contracts/libraries/LibLiquidation.sol",
+        "contracts/libraries/LibProtocol.sol"
+      ],
+      "test_changed": true,
+      "lines_changed": 66
+    },
+    {
+      "sha": "33fc8a7",
+      "full_sha": "33fc8a79372f7f450654d7c6f423cd8736f7ed46",
+      "date": "2026-02-10",
+      "author": "Benjamin Faruna",
+      "subject": "add gettersFacet checks for underflow, ps: failing liquidation test",
+      "score": 16,
+      "reasons": [
+        "explicit security language",
+        "involves oracle/pricing",
+        "changes accounting/balance logic",
+        "spans 5 security domains (fund_flows, liquidation, oracle_price, signatures, state_machines)",
+        "net code removal",
+        "includes test changes"
+      ],
+      "source_files_touched": [
+        "contracts/facets/ProtocolFacet.sol",
+        "contracts/libraries/LibLiquidation.sol",
+        "contracts/libraries/LibProtocol.sol",
+        "contracts/libraries/LibVaultManager.sol",
+        "contracts/models/Error.sol"
+      ],
+      "test_changed": true,
+      "lines_changed": 202
+    },
+    {
+      "sha": "ee48b1a",
+      "full_sha": "ee48b1af9eb0d88f5737555e3f7b9fba2dee7db8",
+      "date": "2026-06-24",
+      "author": "PhantomOz",
+      "subject": "This initiates invariant tests",
+      "score": 15,
+      "reasons": [
+        "unclassified",
+        "adds runtime guards (+1/-0)",
+        "tightens access control (+1/-0)",
+        "changes signature/auth handling",
+        "changes accounting/balance logic",
+        "spans 5 security domains (fund_flows, liquidation, oracle_price, signatures, state_machines)",
+        "focused change (3 source files)",
+        "includes test changes"
+      ],
+      "source_files_touched": [
+        "contracts/libraries/LibDiamond.sol",
+        "contracts/libraries/LibPriceOracle.sol",
+        "contracts/libraries/LibProtocol.sol"
+      ],
+      "test_changed": true,
+      "lines_changed": 17
+    },
+    {
+      "sha": "5106016",
+      "full_sha": "5106016fbc098ba77158b80101f53d43bc0ef31d",
+      "date": "2026-07-01",
+      "author": "PhantomOz",
+      "subject": "fix: resolve audit findings and harden protocol",
+      "score": 13,
+      "reasons": [
+        "bug fix",
+        "tightens access control (+3/-0)",
+        "changes token transfer logic",
+        "changes signature/auth handling",
+        "changes accounting/balance logic",
+        "spans 6 security domains (access_control, fund_flows, liquidation, oracle_price, signatures, state_machines)",
+        "large change (>500 source lines)"
+      ],
+      "source_files_touched": [
+        "contracts/Diamond.sol",
+        "contracts/TokenVault.sol",
+        "contracts/facets/DiamondCutFacet.sol",
+        "contracts/facets/DiamondLoupeFacet.sol",
+        "contracts/facets/GettersFacet.sol",
+        "contracts/facets/LiquidationFacet.sol",
+        "contracts/facets/OwnershipFacet.sol",
+        "contracts/facets/PositionManagerFacet.sol",
+        "contracts/facets/PriceOracleFacet.sol",
+        "contracts/facets/ProtocolFacet.sol",
+        "contracts/facets/VaultManagerFacet.sol",
+        "contracts/facets/YieldStrategyFacet.sol",
+        "contracts/interfaces/IDiamondCut.sol",
+        "contracts/interfaces/IDiamondLoupe.sol",
+        "contracts/interfaces/IERC165.sol",
+        "contracts/interfaces/IERC173.sol",
+        "contracts/interfaces/IVaultManager.sol",
+        "contracts/libraries/LibAppStorage.sol",
+        "contracts/libraries/LibDiamond.sol",
+        "contracts/libraries/LibInterestRateModel.sol",
+        "contracts/libraries/LibLiquidation.sol",
+        "contracts/libraries/LibPositionManager.sol",
+        "contracts/libraries/LibPriceOracle.sol",
+        "contracts/libraries/LibProtocol.sol",
+        "contracts/libraries/LibUtils.sol",
+        "contracts/libraries/LibVaultManager.sol",
+        "contracts/libraries/LibYieldStrategy.sol",
+        "contracts/libraries/SecurityBase.sol",
+        "contracts/mocks/MockAavePool.sol",
+        "contracts/mocks/MockMismatchPool.sol",
+        "contracts/models/Constant.sol",
+        "contracts/models/Error.sol",
+        "contracts/models/Event.sol",
+        "contracts/models/FunctionParams.sol",
+        "contracts/models/Protocol.sol",
+        "contracts/models/Yield.sol",
+        "contracts/upgradeInitializers/DiamondInit.sol"
+      ],
+      "test_changed": false,
+      "lines_changed": 1353
+    },
+    {
+      "sha": "9603e1a",
+      "full_sha": "9603e1a2c96218fc9471ee4c450e89be377d107c",
+      "date": "2026-05-05",
+      "author": "Benjamin Faruna",
+      "subject": "fixed m-10: _ensureSufficientIdle Charges Deficit Only to the Withdrawing Position, Even When Other Positions Contributed to the Shortfall",
+      "score": 13,
+      "reasons": [
+        "bug fix",
+        "changes token transfer logic",
+        "changes accounting/balance logic",
+        "spans 5 security domains (fund_flows, liquidation, oracle_price, signatures, state_machines)",
+        "focused change (3 source files)",
+        "includes test changes"
+      ],
+      "source_files_touched": [
+        "contracts/libraries/LibLiquidation.sol",
+        "contracts/libraries/LibProtocol.sol",
+        "contracts/libraries/LibYieldStrategy.sol"
+      ],
+      "test_changed": true,
+      "lines_changed": 68
+    },
+    {
+      "sha": "501a3a3",
+      "full_sha": "501a3a38d8d0a17622a4670a3df310aea1d0ab0d",
+      "date": "2026-04-30",
+      "author": "Benjamin Faruna",
+      "subject": "fixed h-4: Repay Accounting Executes Before Token Transfer \u2014 CEI Violation Causes Desync With Non-Standard Tokens and Stale totalDeposits",
+      "score": 13,
+      "reasons": [
+        "bug fix",
+        "changes token transfer logic",
+        "changes accounting/balance logic",
+        "spans 5 security domains (fund_flows, liquidation, oracle_price, signatures, state_machines)",
+        "focused change (1 source files)",
+        "net code removal"
+      ],
+      "source_files_touched": [
+        "contracts/libraries/LibProtocol.sol"
+      ],
+      "test_changed": false,
+      "lines_changed": 23
+    },
+    {
+      "sha": "53ffdc3",
+      "full_sha": "53ffdc31c4dfe2bf12f37d9f495fdd28ce15de7a",
+      "date": "2026-03-28",
+      "author": "Benjamin Faruna",
+      "subject": "fixed liquidation test and updated TokenVault contract",
+      "score": 13,
+      "reasons": [
+        "bug fix",
+        "involves oracle/pricing",
+        "changes token transfer logic",
+        "changes accounting/balance logic",
+        "spans 6 security domains (access_control, fund_flows, liquidation, oracle_price, signatures, state_machines)",
+        "includes test changes"
+      ],
+      "source_files_touched": [
+        "contracts/TokenVault.sol",
+        "contracts/facets/VaultManagerFacet.sol",
+        "contracts/libraries/LibProtocol.sol",
+        "contracts/libraries/LibVaultManager.sol"
+      ],
+      "test_changed": true,
+      "lines_changed": 24
+    },
+    {
+      "sha": "f49f76c",
+      "full_sha": "f49f76c03bd0d8e94588cfd58a5fff23a86446a7",
+      "date": "2026-03-25",
+      "author": "Benjamin Faruna",
+      "subject": "fixed c-1: Liquidator Can Steal All Borrower Collateral",
+      "score": 13,
+      "reasons": [
+        "bug fix",
+        "involves oracle/pricing",
+        "changes accounting/balance logic",
+        "spans 4 security domains (fund_flows, liquidation, oracle_price, state_machines)",
+        "focused change (1 source files)",
+        "includes test changes"
+      ],
+      "source_files_touched": [
+        "contracts/libraries/LibLiquidation.sol"
+      ],
+      "test_changed": true,
+      "lines_changed": 14
+    },
+    {
+      "sha": "4a2b217",
+      "full_sha": "4a2b217cf6fd6d337e511b7743f5897d99318f15",
+      "date": "2026-07-01",
+      "author": "PhantomOz",
+      "subject": "fix: enforce minimum tenure on _requestBorrow (2026-07-01 #1)",
+      "score": 12,
+      "reasons": [
+        "bug fix",
+        "changes signature/auth handling",
+        "spans 5 security domains (fund_flows, liquidation, oracle_price, signatures, state_machines)",
+        "focused change (1 source files)",
+        "includes test changes"
+      ],
+      "source_files_touched": [
+        "contracts/libraries/LibProtocol.sol"
+      ],
+      "test_changed": true,
+      "lines_changed": 7
+    }
+  ],
+  "dangerous_area_changes": {
+    "access_control": {
+      "commit_count": 15,
+      "files": [
+        "contracts/TokenVault.sol",
+        "contracts/libraries/SecurityBase.sol"
+      ],
+      "commits": [
+        {
+          "sha": "99c700c",
+          "date": "2026-07-01",
+          "subject": "fix: remediate 2026-07-01 review findings not covered by prior fixes"
+        },
+        {
+          "sha": "5106016",
+          "date": "2026-07-01",
+          "subject": "fix: resolve audit findings and harden protocol"
+        },
+        {
+          "sha": "ee1350e",
+          "date": "2026-06-12",
+          "subject": "Position and Loan Liquidations Leave ERC4626 Vault Borrow Accounting Inflated"
+        },
+        {
+          "sha": "d3f4a48",
+          "date": "2026-05-03",
+          "subject": "fixed m-6: No Reentrancy Guard on Diamond Facets \u2014 External Calls in Core Operat"
+        },
+        {
+          "sha": "876cbe5",
+          "date": "2026-04-27",
+          "subject": "update token vault details"
+        },
+        {
+          "sha": "53ffdc3",
+          "date": "2026-03-28",
+          "subject": "fixed liquidation test and updated TokenVault contract"
+        },
+        {
+          "sha": "9199af2",
+          "date": "2026-03-25",
+          "subject": "update token vault total assests and shares calculation"
+        },
+        {
+          "sha": "472fcaa",
+          "date": "2026-02-15",
+          "subject": "token vault deposit and withdraw allows only diamond, totalAssets based on depos"
+        },
+        {
+          "sha": "63539c7",
+          "date": "2026-02-14",
+          "subject": "liquidation strategy bugfix"
+        },
+        {
+          "sha": "72fdf67",
+          "date": "2025-11-29",
+          "subject": "Add feature for whitelisting addresses"
+        },
+        {
+          "sha": "d735298",
+          "date": "2025-11-28",
+          "subject": "This adds the Yield Strategy Feature"
+        },
+        {
+          "sha": "f1e07eb",
+          "date": "2025-09-24",
+          "subject": "Add borrow logic"
+        },
+        {
+          "sha": "229b5ec",
+          "date": "2025-09-21",
+          "subject": "vault deposit and withdrawal completed"
+        },
+        {
+          "sha": "6a0a76f",
+          "date": "2025-09-07",
+          "subject": "Test withdraw failing"
+        },
+        {
+          "sha": "b51fdfd",
+          "date": "2025-09-03",
+          "subject": "add token support functionality"
+        }
+      ]
+    },
+    "fund_flows": {
+      "commit_count": 65,
+      "files": [
+        "contracts/TokenVault.sol",
+        "contracts/facets/GettersFacet.sol",
+        "contracts/facets/LiquidationFacet.sol",
+        "contracts/facets/PositionManagerFacet.sol",
+        "contracts/facets/ProtocolFacet.sol",
+        "contracts/facets/VaultManagerFacet.sol",
+        "contracts/facets/YieldStrategyFacet.sol",
+        "contracts/libraries/LibAppStorage.sol",
+        "contracts/libraries/LibLiquidation.sol",
+        "contracts/libraries/LibPriceOracle.sol",
+        "contracts/libraries/LibProtocol.sol",
+        "contracts/libraries/LibVaultManager.sol",
+        "contracts/libraries/LibYieldStrategy.sol",
+        "contracts/mocks/MockAavePool.sol",
+        "contracts/models/Event.sol"
+      ],
+      "commits": [
+        {
+          "sha": "4a2b217",
+          "date": "2026-07-01",
+          "subject": "fix: enforce minimum tenure on _requestBorrow (2026-07-01 #1)"
+        },
+        {
+          "sha": "99c700c",
+          "date": "2026-07-01",
+          "subject": "fix: remediate 2026-07-01 review findings not covered by prior fixes"
+        },
+        {
+          "sha": "5106016",
+          "date": "2026-07-01",
+          "subject": "fix: resolve audit findings and harden protocol"
+        },
+        {
+          "sha": "ee48b1a",
+          "date": "2026-06-24",
+          "subject": "This initiates invariant tests"
+        },
+        {
+          "sha": "da41636",
+          "date": "2026-06-17",
+          "subject": "fix H-02: double counting on borrow bug"
+        },
+        {
+          "sha": "bf0af1d",
+          "date": "2026-06-12",
+          "subject": "Fixed-Term Loan Repayment Calculates Principal Repaid After Principal Is Mutated"
+        },
+        {
+          "sha": "ee1350e",
+          "date": "2026-06-12",
+          "subject": "Position and Loan Liquidations Leave ERC4626 Vault Borrow Accounting Inflated"
+        },
+        {
+          "sha": "d00e4e2",
+          "date": "2026-06-05",
+          "subject": "fixed l-8: _harvestProtocolYield Can Be Called When Strategy Is Paused, Unlike _"
+        },
+        {
+          "sha": "2eb293a",
+          "date": "2026-06-05",
+          "subject": "fixed l-7: No Minimum Tenure Validation on _takeLoan"
+        },
+        {
+          "sha": "8ccb722",
+          "date": "2026-06-05",
+          "subject": "fixed l-4: _outstandingBalance Calculates Penalty Interest on Original Principal"
+        },
+        {
+          "sha": "9603e1a",
+          "date": "2026-05-05",
+          "subject": "fixed m-10: _ensureSufficientIdle Charges Deficit Only to the Withdrawing Positi"
+        },
+        {
+          "sha": "14a75c4",
+          "date": "2026-05-05",
+          "subject": "fixed m-9: totalBorrows Tracking Diverges From Actual Debt Due to Interest Misac"
+        },
+        {
+          "sha": "a9a8200",
+          "date": "2026-05-03",
+          "subject": "fixed l-1: _setInterestRate Has No Upper Bound and l-2: repayLoanFor Bypasses Wh"
+        },
+        {
+          "sha": "3c715c3",
+          "date": "2026-05-03",
+          "subject": "fixed m-8: depositCollateral Does Not Enforce Whitelist for Existing Position Ho"
+        },
+        {
+          "sha": "8d58bba",
+          "date": "2026-05-03",
+          "subject": "fixed m-7: _requestBorrow Skips Vault Utilization Check \u2014 Cross-Chain Borrows Ca"
+        }
+      ],
+      "truncated": true
+    },
+    "oracle_price": {
+      "commit_count": 62,
+      "files": [
+        "contracts/TokenVault.sol",
+        "contracts/facets/PriceOracleFacet.sol",
+        "contracts/facets/ProtocolFacet.sol",
+        "contracts/facets/VaultManagerFacet.sol",
+        "contracts/libraries/LibAppStorage.sol",
+        "contracts/libraries/LibLiquidation.sol",
+        "contracts/libraries/LibPriceOracle.sol",
+        "contracts/libraries/LibProtocol.sol",
+        "contracts/libraries/LibUtils.sol",
+        "contracts/libraries/LibVaultManager.sol",
+        "contracts/models/Constant.sol",
+        "contracts/models/Error.sol",
+        "contracts/models/Event.sol",
+        "contracts/models/Protocol.sol"
+      ],
+      "commits": [
+        {
+          "sha": "4a2b217",
+          "date": "2026-07-01",
+          "subject": "fix: enforce minimum tenure on _requestBorrow (2026-07-01 #1)"
+        },
+        {
+          "sha": "99c700c",
+          "date": "2026-07-01",
+          "subject": "fix: remediate 2026-07-01 review findings not covered by prior fixes"
+        },
+        {
+          "sha": "5106016",
+          "date": "2026-07-01",
+          "subject": "fix: resolve audit findings and harden protocol"
+        },
+        {
+          "sha": "ee48b1a",
+          "date": "2026-06-24",
+          "subject": "This initiates invariant tests"
+        },
+        {
+          "sha": "da41636",
+          "date": "2026-06-17",
+          "subject": "fix H-02: double counting on borrow bug"
+        },
+        {
+          "sha": "bf0af1d",
+          "date": "2026-06-12",
+          "subject": "Fixed-Term Loan Repayment Calculates Principal Repaid After Principal Is Mutated"
+        },
+        {
+          "sha": "ee1350e",
+          "date": "2026-06-12",
+          "subject": "Position and Loan Liquidations Leave ERC4626 Vault Borrow Accounting Inflated"
+        },
+        {
+          "sha": "d00e4e2",
+          "date": "2026-06-05",
+          "subject": "fixed l-8: _harvestProtocolYield Can Be Called When Strategy Is Paused, Unlike _"
+        },
+        {
+          "sha": "2eb293a",
+          "date": "2026-06-05",
+          "subject": "fixed l-7: No Minimum Tenure Validation on _takeLoan"
+        },
+        {
+          "sha": "8ccb722",
+          "date": "2026-06-05",
+          "subject": "fixed l-4: _outstandingBalance Calculates Penalty Interest on Original Principal"
+        },
+        {
+          "sha": "9603e1a",
+          "date": "2026-05-05",
+          "subject": "fixed m-10: _ensureSufficientIdle Charges Deficit Only to the Withdrawing Positi"
+        },
+        {
+          "sha": "14a75c4",
+          "date": "2026-05-05",
+          "subject": "fixed m-9: totalBorrows Tracking Diverges From Actual Debt Due to Interest Misac"
+        },
+        {
+          "sha": "a9a8200",
+          "date": "2026-05-03",
+          "subject": "fixed l-1: _setInterestRate Has No Upper Bound and l-2: repayLoanFor Bypasses Wh"
+        },
+        {
+          "sha": "3c715c3",
+          "date": "2026-05-03",
+          "subject": "fixed m-8: depositCollateral Does Not Enforce Whitelist for Existing Position Ho"
+        },
+        {
+          "sha": "8d58bba",
+          "date": "2026-05-03",
+          "subject": "fixed m-7: _requestBorrow Skips Vault Utilization Check \u2014 Cross-Chain Borrows Ca"
+        }
+      ],
+      "truncated": true
+    },
+    "liquidation": {
+      "commit_count": 61,
+      "files": [
+        "contracts/facets/LiquidationFacet.sol",
+        "contracts/facets/VaultManagerFacet.sol",
+        "contracts/libraries/LibAppStorage.sol",
+        "contracts/libraries/LibLiquidation.sol",
+        "contracts/libraries/LibProtocol.sol",
+        "contracts/libraries/LibVaultManager.sol",
+        "contracts/models/Constant.sol",
+        "contracts/models/Event.sol",
+        "contracts/models/Protocol.sol"
+      ],
+      "commits": [
+        {
+          "sha": "4a2b217",
+          "date": "2026-07-01",
+          "subject": "fix: enforce minimum tenure on _requestBorrow (2026-07-01 #1)"
+        },
+        {
+          "sha": "99c700c",
+          "date": "2026-07-01",
+          "subject": "fix: remediate 2026-07-01 review findings not covered by prior fixes"
+        },
+        {
+          "sha": "5106016",
+          "date": "2026-07-01",
+          "subject": "fix: resolve audit findings and harden protocol"
+        },
+        {
+          "sha": "ee48b1a",
+          "date": "2026-06-24",
+          "subject": "This initiates invariant tests"
+        },
+        {
+          "sha": "da41636",
+          "date": "2026-06-17",
+          "subject": "fix H-02: double counting on borrow bug"
+        },
+        {
+          "sha": "bf0af1d",
+          "date": "2026-06-12",
+          "subject": "Fixed-Term Loan Repayment Calculates Principal Repaid After Principal Is Mutated"
+        },
+        {
+          "sha": "ee1350e",
+          "date": "2026-06-12",
+          "subject": "Position and Loan Liquidations Leave ERC4626 Vault Borrow Accounting Inflated"
+        },
+        {
+          "sha": "2eb293a",
+          "date": "2026-06-05",
+          "subject": "fixed l-7: No Minimum Tenure Validation on _takeLoan"
+        },
+        {
+          "sha": "8ccb722",
+          "date": "2026-06-05",
+          "subject": "fixed l-4: _outstandingBalance Calculates Penalty Interest on Original Principal"
+        },
+        {
+          "sha": "9603e1a",
+          "date": "2026-05-05",
+          "subject": "fixed m-10: _ensureSufficientIdle Charges Deficit Only to the Withdrawing Positi"
+        },
+        {
+          "sha": "14a75c4",
+          "date": "2026-05-05",
+          "subject": "fixed m-9: totalBorrows Tracking Diverges From Actual Debt Due to Interest Misac"
+        },
+        {
+          "sha": "a9a8200",
+          "date": "2026-05-03",
+          "subject": "fixed l-1: _setInterestRate Has No Upper Bound and l-2: repayLoanFor Bypasses Wh"
+        },
+        {
+          "sha": "3c715c3",
+          "date": "2026-05-03",
+          "subject": "fixed m-8: depositCollateral Does Not Enforce Whitelist for Existing Position Ho"
+        },
+        {
+          "sha": "8d58bba",
+          "date": "2026-05-03",
+          "subject": "fixed m-7: _requestBorrow Skips Vault Utilization Check \u2014 Cross-Chain Borrows Ca"
+        },
+        {
+          "sha": "d3f4a48",
+          "date": "2026-05-03",
+          "subject": "fixed m-6: No Reentrancy Guard on Diamond Facets \u2014 External Calls in Core Operat"
+        }
+      ],
+      "truncated": true
+    },
+    "signatures": {
+      "commit_count": 57,
+      "files": [
+        "contracts/facets/PositionManagerFacet.sol",
+        "contracts/facets/ProtocolFacet.sol",
+        "contracts/libraries/LibProtocol.sol",
+        "contracts/models/Error.sol",
+        "contracts/models/Protocol.sol"
+      ],
+      "commits": [
+        {
+          "sha": "4a2b217",
+          "date": "2026-07-01",
+          "subject": "fix: enforce minimum tenure on _requestBorrow (2026-07-01 #1)"
+        },
+        {
+          "sha": "99c700c",
+          "date": "2026-07-01",
+          "subject": "fix: remediate 2026-07-01 review findings not covered by prior fixes"
+        },
+        {
+          "sha": "5106016",
+          "date": "2026-07-01",
+          "subject": "fix: resolve audit findings and harden protocol"
+        },
+        {
+          "sha": "ee48b1a",
+          "date": "2026-06-24",
+          "subject": "This initiates invariant tests"
+        },
+        {
+          "sha": "da41636",
+          "date": "2026-06-17",
+          "subject": "fix H-02: double counting on borrow bug"
+        },
+        {
+          "sha": "bf0af1d",
+          "date": "2026-06-12",
+          "subject": "Fixed-Term Loan Repayment Calculates Principal Repaid After Principal Is Mutated"
+        },
+        {
+          "sha": "d00e4e2",
+          "date": "2026-06-05",
+          "subject": "fixed l-8: _harvestProtocolYield Can Be Called When Strategy Is Paused, Unlike _"
+        },
+        {
+          "sha": "2eb293a",
+          "date": "2026-06-05",
+          "subject": "fixed l-7: No Minimum Tenure Validation on _takeLoan"
+        },
+        {
+          "sha": "8ccb722",
+          "date": "2026-06-05",
+          "subject": "fixed l-4: _outstandingBalance Calculates Penalty Interest on Original Principal"
+        },
+        {
+          "sha": "9603e1a",
+          "date": "2026-05-05",
+          "subject": "fixed m-10: _ensureSufficientIdle Charges Deficit Only to the Withdrawing Positi"
+        },
+        {
+          "sha": "14a75c4",
+          "date": "2026-05-05",
+          "subject": "fixed m-9: totalBorrows Tracking Diverges From Actual Debt Due to Interest Misac"
+        },
+        {
+          "sha": "a9a8200",
+          "date": "2026-05-03",
+          "subject": "fixed l-1: _setInterestRate Has No Upper Bound and l-2: repayLoanFor Bypasses Wh"
+        },
+        {
+          "sha": "3c715c3",
+          "date": "2026-05-03",
+          "subject": "fixed m-8: depositCollateral Does Not Enforce Whitelist for Existing Position Ho"
+        },
+        {
+          "sha": "8d58bba",
+          "date": "2026-05-03",
+          "subject": "fixed m-7: _requestBorrow Skips Vault Utilization Check \u2014 Cross-Chain Borrows Ca"
+        },
+        {
+          "sha": "d3f4a48",
+          "date": "2026-05-03",
+          "subject": "fixed m-6: No Reentrancy Guard on Diamond Facets \u2014 External Calls in Core Operat"
+        }
+      ],
+      "truncated": true
+    },
+    "state_machines": {
+      "commit_count": 61,
+      "files": [
+        "contracts/TokenVault.sol",
+        "contracts/facets/VaultManagerFacet.sol",
+        "contracts/facets/YieldStrategyFacet.sol",
+        "contracts/libraries/LibLiquidation.sol",
+        "contracts/libraries/LibProtocol.sol",
+        "contracts/libraries/LibVaultManager.sol",
+        "contracts/libraries/LibYieldStrategy.sol",
+        "contracts/libraries/SecurityBase.sol",
+        "contracts/models/Event.sol",
+        "contracts/models/Yield.sol"
+      ],
+      "commits": [
+        {
+          "sha": "4a2b217",
+          "date": "2026-07-01",
+          "subject": "fix: enforce minimum tenure on _requestBorrow (2026-07-01 #1)"
+        },
+        {
+          "sha": "99c700c",
+          "date": "2026-07-01",
+          "subject": "fix: remediate 2026-07-01 review findings not covered by prior fixes"
+        },
+        {
+          "sha": "5106016",
+          "date": "2026-07-01",
+          "subject": "fix: resolve audit findings and harden protocol"
+        },
+        {
+          "sha": "ee48b1a",
+          "date": "2026-06-24",
+          "subject": "This initiates invariant tests"
+        },
+        {
+          "sha": "da41636",
+          "date": "2026-06-17",
+          "subject": "fix H-02: double counting on borrow bug"
+        },
+        {
+          "sha": "bf0af1d",
+          "date": "2026-06-12",
+          "subject": "Fixed-Term Loan Repayment Calculates Principal Repaid After Principal Is Mutated"
+        },
+        {
+          "sha": "ee1350e",
+          "date": "2026-06-12",
+          "subject": "Position and Loan Liquidations Leave ERC4626 Vault Borrow Accounting Inflated"
+        },
+        {
+          "sha": "d00e4e2",
+          "date": "2026-06-05",
+          "subject": "fixed l-8: _harvestProtocolYield Can Be Called When Strategy Is Paused, Unlike _"
+        },
+        {
+          "sha": "2eb293a",
+          "date": "2026-06-05",
+          "subject": "fixed l-7: No Minimum Tenure Validation on _takeLoan"
+        },
+        {
+          "sha": "8ccb722",
+          "date": "2026-06-05",
+          "subject": "fixed l-4: _outstandingBalance Calculates Penalty Interest on Original Principal"
+        },
+        {
+          "sha": "9603e1a",
+          "date": "2026-05-05",
+          "subject": "fixed m-10: _ensureSufficientIdle Charges Deficit Only to the Withdrawing Positi"
+        },
+        {
+          "sha": "14a75c4",
+          "date": "2026-05-05",
+          "subject": "fixed m-9: totalBorrows Tracking Diverges From Actual Debt Due to Interest Misac"
+        },
+        {
+          "sha": "a9a8200",
+          "date": "2026-05-03",
+          "subject": "fixed l-1: _setInterestRate Has No Upper Bound and l-2: repayLoanFor Bypasses Wh"
+        },
+        {
+          "sha": "3c715c3",
+          "date": "2026-05-03",
+          "subject": "fixed m-8: depositCollateral Does Not Enforce Whitelist for Existing Position Ho"
+        },
+        {
+          "sha": "8d58bba",
+          "date": "2026-05-03",
+          "subject": "fixed m-7: _requestBorrow Skips Vault Utilization Check \u2014 Cross-Chain Borrows Ca"
+        }
+      ],
+      "truncated": true
+    }
+  },
+  "late_changes": {
+    "window_days": 30,
+    "cutoff_date": "2026-06-01",
+    "latest_commit_date": "2026-07-01",
+    "late_commits": [
+      {
+        "sha": "4a2b217",
+        "date": "2026-07-01",
+        "author": "PhantomOz",
+        "subject": "fix: enforce minimum tenure on _requestBorrow (2026-07-01 #1)",
+        "source_files": [
+          "contracts/libraries/LibProtocol.sol"
+        ],
+        "test_changed": true,
+        "lines_changed": 7
+      },
+      {
+        "sha": "99c700c",
+        "date": "2026-07-01",
+        "author": "PhantomOz",
+        "subject": "fix: remediate 2026-07-01 review findings not covered by prior fixes",
+        "source_files": [
+          "contracts/TokenVault.sol",
+          "contracts/libraries/LibLiquidation.sol",
+          "contracts/libraries/LibProtocol.sol"
+        ],
+        "test_changed": true,
+        "lines_changed": 66
+      },
+      {
+        "sha": "5106016",
+        "date": "2026-07-01",
+        "author": "PhantomOz",
+        "subject": "fix: resolve audit findings and harden protocol",
+        "source_files": [
+          "contracts/Diamond.sol",
+          "contracts/TokenVault.sol",
+          "contracts/facets/DiamondCutFacet.sol",
+          "contracts/facets/DiamondLoupeFacet.sol",
+          "contracts/facets/GettersFacet.sol",
+          "contracts/facets/LiquidationFacet.sol",
+          "contracts/facets/OwnershipFacet.sol",
+          "contracts/facets/PositionManagerFacet.sol",
+          "contracts/facets/PriceOracleFacet.sol",
+          "contracts/facets/ProtocolFacet.sol"
+        ],
+        "test_changed": false,
+        "lines_changed": 1353
+      },
+      {
+        "sha": "ee48b1a",
+        "date": "2026-06-24",
+        "author": "PhantomOz",
+        "subject": "This initiates invariant tests",
+        "source_files": [
+          "contracts/libraries/LibDiamond.sol",
+          "contracts/libraries/LibPriceOracle.sol",
+          "contracts/libraries/LibProtocol.sol"
+        ],
+        "test_changed": true,
+        "lines_changed": 17
+      },
+      {
+        "sha": "da41636",
+        "date": "2026-06-17",
+        "author": "Benjamin Faruna",
+        "subject": "fix H-02: double counting on borrow bug",
+        "source_files": [
+          "contracts/libraries/LibProtocol.sol"
+        ],
+        "test_changed": true,
+        "lines_changed": 2
+      },
+      {
+        "sha": "4c67750",
+        "date": "2026-06-12",
+        "author": "Benjamin Faruna",
+        "subject": "fixed: Position Transfer Can Overwrite A Recipient's Existing Position Mapping",
+        "source_files": [
+          "contracts/libraries/LibPositionManager.sol"
+        ],
+        "test_changed": true,
+        "lines_changed": 1
+      },
+      {
+        "sha": "bf0af1d",
+        "date": "2026-06-12",
+        "author": "Benjamin Faruna",
+        "subject": "Fixed-Term Loan Repayment Calculates Principal Repaid After Principal Is Mutated",
+        "source_files": [
+          "contracts/libraries/LibProtocol.sol"
+        ],
+        "test_changed": false,
+        "lines_changed": 4
+      },
+      {
+        "sha": "ee1350e",
+        "date": "2026-06-12",
+        "author": "Benjamin Faruna",
+        "subject": "Position and Loan Liquidations Leave ERC4626 Vault Borrow Accounting Inflated",
+        "source_files": [
+          "contracts/TokenVault.sol",
+          "contracts/facets/VaultManagerFacet.sol",
+          "contracts/libraries/LibLiquidation.sol"
+        ],
+        "test_changed": true,
+        "lines_changed": 32
+      },
+      {
+        "sha": "d00e4e2",
+        "date": "2026-06-05",
+        "author": "Benjamin Faruna",
+        "subject": "fixed l-8: _harvestProtocolYield Can Be Called When Strategy Is Paused, Unlike _",
+        "source_files": [
+          "contracts/libraries/LibYieldStrategy.sol",
+          "contracts/mocks/MockAavePool.sol",
+          "contracts/mocks/MockMismatchPool.sol",
+          "contracts/models/Error.sol"
+        ],
+        "test_changed": true,
+        "lines_changed": 46
+      },
+      {
+        "sha": "2eb293a",
+        "date": "2026-06-05",
+        "author": "Benjamin Faruna",
+        "subject": "fixed l-7: No Minimum Tenure Validation on _takeLoan",
+        "source_files": [
+          "contracts/libraries/LibProtocol.sol",
+          "contracts/models/Constant.sol",
+          "contracts/models/Error.sol"
+        ],
+        "test_changed": false,
+        "lines_changed": 3
+      },
+      {
+        "sha": "8ccb722",
+        "date": "2026-06-05",
+        "author": "Benjamin Faruna",
+        "subject": "fixed l-4: _outstandingBalance Calculates Penalty Interest on Original Principal",
+        "source_files": [
+          "contracts/libraries/LibProtocol.sol",
+          "contracts/libraries/LibYieldStrategy.sol",
+          "contracts/models/Constant.sol"
+        ],
+        "test_changed": true,
+        "lines_changed": 13
+      }
+    ],
+    "source_without_test_count": 3,
+    "total_late_source_commits": 11
+  },
+  "forked_deps": {
+    "detected_libs": [
+      {
+        "name": "chainlink-evm",
+        "path": "lib/chainlink-evm",
+        "known_upstream": "Chainlink",
+        "is_submodule": true,
+        "is_internalized": false,
+        "sol_file_count": 838,
+        "pragma_versions": [
+          "0.8.16",
+          "0.8.19",
+          "0.8.24",
+          "0.8.26",
+          "0.8.6",
+          ">=0.4.19",
+          ">=0.4.21 <0.9.0",
+          ">=0.4.22 <0.9.0",
+          ">=0.6.0 <0.9.0",
+          ">=0.6.2",
+          ">=0.6.2 <0.9.0",
+          ">=0.7.0 <0.9.0",
+          ">=0.7.6 <0.9.0",
+          "^0.8.0",
+          "^0.8.12",
+          "^0.8.15",
+          "^0.8.16",
+          "^0.8.19",
+          "^0.8.20",
+          "^0.8.24",
+          "^0.8.26",
+          "^0.8.4",
+          "^0.8.6",
+          "^0.8.9"
+        ],
+        "notes": [
+          "Pragma '>=0.4.19' differs from expected upstream versions",
+          "Pragma '>=0.4.21 <0.9.0' differs from expected upstream versions",
+          "Pragma '>=0.4.22 <0.9.0' differs from expected upstream versions",
+          "Pragma '>=0.7.0 <0.9.0' differs from expected upstream versions",
+          "Pragma '>=0.7.6 <0.9.0' differs from expected upstream versions"
+        ]
+      },
+      {
+        "name": "openzeppelin-contracts",
+        "path": "lib/openzeppelin-contracts",
+        "known_upstream": "OpenZeppelin",
+        "is_submodule": true,
+        "is_internalized": false,
+        "sol_file_count": 425,
+        "pragma_versions": [
+          ">=0.4.11",
+          ">=0.4.16",
+          ">=0.4.22 <0.9.0",
+          ">=0.5.0",
+          ">=0.6.0 <0.9.0",
+          ">=0.6.2",
+          ">=0.6.2 <0.9.0",
+          ">=0.6.9",
+          ">=0.7.0 <0.9.0",
+          ">=0.8.0 <0.9.0",
+          ">=0.8.4",
+          "^0.8.20",
+          "^0.8.21",
+          "^0.8.22",
+          "^0.8.24",
+          "^0.8.26",
+          "^0.8.27"
+        ],
+        "notes": [
+          "Pragma '>=0.4.11' differs from expected upstream versions",
+          "Pragma '>=0.4.16' differs from expected upstream versions",
+          "Pragma '>=0.4.22 <0.9.0' differs from expected upstream versions",
+          "Pragma '>=0.5.0' differs from expected upstream versions",
+          "Pragma '>=0.6.0 <0.9.0' differs from expected upstream versions",
+          "Pragma '>=0.6.2' differs from expected upstream versions",
+          "Pragma '>=0.6.2 <0.9.0' differs from expected upstream versions",
+          "Pragma '>=0.6.9' differs from expected upstream versions",
+          "Pragma '>=0.7.0 <0.9.0' differs from expected upstream versions"
+        ]
+      }
+    ],
+    "removed_submodules": []
+  },
+  "tech_debt": {
+    "total_count": 0,
+    "items": [],
+    "files_with_debt": 0,
+    "capped": false
+  },
+  "dev_patterns": {
+    "test_co_change_rate": 0.794,
+    "fix_without_test_rate": 0.3,
+    "avg_commit_size": 123.0,
+    "avg_commit_size_note": null,
+    "single_developer_pct": 0.703,
+    "top_contributor": "Benjamin Faruna",
+    "contributor_breakdown": [
+      {
+        "author": "Benjamin Faruna",
+        "lines_added": 4637,
+        "pct": 0.703
+      },
+      {
+        "author": "PhantomOz",
+        "lines_added": 1957,
+        "pct": 0.297
+      }
+    ]
+  }
+}

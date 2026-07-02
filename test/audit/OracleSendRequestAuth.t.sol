@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 import {Base} from "../Base.t.sol";
-import {ADDRESS_NOT_WHITELISTED} from "../../contracts/models/Error.sol";
+import {NOT_KEEPER} from "../../contracts/models/Error.sol";
 
 /// @dev Minimal Chainlink Functions router that "bills" LINK by counting each
 ///      request against the subscription id it is handed. Lets us prove who pays.
@@ -21,10 +21,12 @@ contract MockFunctionsRouter {
     }
 }
 
-/// @notice Finding #2: `sendRequest` was unauthenticated and forwarded a
-///         caller-supplied subscriptionId, letting anyone drain the protocol's
-///         Chainlink LINK subscription. Refresh is keeper-triggered, so the fix
-///         gates on the keeper whitelist and forces the stored subscription id.
+/// @notice `sendRequest` was unauthenticated and forwarded a caller-supplied
+///         subscriptionId, letting anyone drain the protocol's Chainlink LINK
+///         subscription. Refresh is keeper-triggered, so the fix gates on a
+///         DEDICATED keeper allowlist (distinct from the general user whitelist,
+///         which every borrower/depositor is on) and forces the stored
+///         subscription id.
 contract OracleSendRequestAuthTest is Base {
     MockFunctionsRouter router;
 
@@ -42,20 +44,33 @@ contract OracleSendRequestAuthTest is Base {
         priceOracleF.setupSource("return Functions.encodeUint256(1)");
     }
 
-    /// @dev The fix: a non-whitelisted attacker can no longer trigger a refresh.
+    /// @dev The fix: a non-keeper attacker can no longer trigger a refresh.
     function test_attacker_cannot_send_request() public {
         string[] memory args = new string[](0);
         vm.prank(attacker);
-        vm.expectRevert(abi.encodeWithSelector(ADDRESS_NOT_WHITELISTED.selector, attacker));
+        vm.expectRevert(abi.encodeWithSelector(NOT_KEEPER.selector, attacker));
         priceOracleF.sendRequest(ATTACKER_SUB, args);
 
         assertEq(router.callsBilledTo(PROTOCOL_SUB), 0, "no LINK should have been billed");
     }
 
-    /// @dev The whitelisted keeper can refresh, and the caller-supplied id is
+    /// @dev A merely whitelisted user (ordinary borrower/depositor) is NOT a
+    ///      keeper and cannot bill the subscription — the core of the finding.
+    function test_whitelisted_user_cannot_send_request() public {
+        positionManagerF.whitelistAddress(attacker);
+
+        string[] memory args = new string[](0);
+        vm.prank(attacker);
+        vm.expectRevert(abi.encodeWithSelector(NOT_KEEPER.selector, attacker));
+        priceOracleF.sendRequest(ATTACKER_SUB, args);
+
+        assertEq(router.callsBilledTo(PROTOCOL_SUB), 0, "whitelisted user must not bill LINK");
+    }
+
+    /// @dev The authorized keeper can refresh, and the caller-supplied id is
     ///      ignored in favour of the protocol's own subscription.
     function test_keeper_refresh_uses_protocol_subscription() public {
-        positionManagerF.whitelistAddress(keeper);
+        priceOracleF.setKeeper(keeper, true);
 
         string[] memory args = new string[](0);
         // keeper passes a bogus subscription id; the hub must ignore it

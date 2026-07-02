@@ -52,12 +52,81 @@ contract PositionManagerTest is Base {
 
         uint256 _positionId = positionManagerF.createPositionFor(_user);
 
-        vm.startPrank(_user);
-        uint256 _retainedPositionId = positionManagerF.transferPositionOwnership(_newAddress);
+        // Step 1: owner proposes the transfer. Ownership does NOT move yet.
+        vm.prank(_user);
+        uint256 _proposed = positionManagerF.transferPositionOwnership(_newAddress);
+        assertEq(_proposed, _positionId);
+        assertEq(positionManagerF.getPositionIdForUser(_user), _positionId, "owner keeps position until accepted");
+        assertEq(positionManagerF.getPositionIdForUser(_newAddress), 0, "recipient not credited until accepted");
+        assertEq(positionManagerF.getPendingPositionTransfer(_positionId), _newAddress, "transfer is pending");
 
-        assertEq(_retainedPositionId, _positionId);
+        // Step 2: recipient accepts and pulls the position.
+        vm.prank(_newAddress);
+        uint256 _accepted = positionManagerF.acceptPositionTransfer(_positionId);
+
+        assertEq(_accepted, _positionId);
         assertEq(positionManagerF.getPositionIdForUser(_newAddress), _positionId);
         assertEq(positionManagerF.getPositionIdForUser(_user), 0);
+        assertEq(positionManagerF.getPendingPositionTransfer(_positionId), address(0), "pending cleared on accept");
+    }
+
+    function testTransferPositionOwnershipRequiresRecipientAccept() public {
+        // The core of finding #5: a position cannot be forced onto a recipient.
+        address _user = address(0xdead);
+        address _newAddress = address(0xacc);
+
+        uint256 _positionId = positionManagerF.createPositionFor(_user);
+
+        vm.prank(_user);
+        positionManagerF.transferPositionOwnership(_newAddress);
+
+        // Nothing an outsider (or the initiator) does completes the transfer —
+        // only the named recipient can, by calling acceptPositionTransfer.
+        assertEq(positionManagerF.getUserForPositionId(_positionId), _user, "still owned by initiator");
+    }
+
+    function testAcceptPositionTransferFailsForNonRecipient() public {
+        address _user = address(0xdead);
+        address _newAddress = address(0xacc);
+        address _stranger = address(0xa);
+
+        uint256 _positionId = positionManagerF.createPositionFor(_user);
+
+        vm.prank(_user);
+        positionManagerF.transferPositionOwnership(_newAddress);
+
+        // A whitelisted third party cannot accept a transfer addressed to someone else.
+        vm.prank(_stranger);
+        vm.expectRevert(abi.encodeWithSelector(NOT_PENDING_RECIPIENT.selector, _stranger));
+        positionManagerF.acceptPositionTransfer(_positionId);
+    }
+
+    function testAcceptPositionTransferFailsWhenNonePending() public {
+        address _user = address(0xdead);
+        uint256 _positionId = positionManagerF.createPositionFor(_user);
+
+        vm.prank(address(0xacc));
+        vm.expectRevert(abi.encodeWithSelector(NO_PENDING_TRANSFER.selector, _positionId));
+        positionManagerF.acceptPositionTransfer(_positionId);
+    }
+
+    function testCancelPositionTransfer() public {
+        address _user = address(0xdead);
+        address _newAddress = address(0xacc);
+
+        uint256 _positionId = positionManagerF.createPositionFor(_user);
+
+        vm.prank(_user);
+        positionManagerF.transferPositionOwnership(_newAddress);
+
+        vm.prank(_user);
+        positionManagerF.cancelPositionTransfer();
+        assertEq(positionManagerF.getPendingPositionTransfer(_positionId), address(0), "pending cleared");
+
+        // After cancel the recipient can no longer accept.
+        vm.prank(_newAddress);
+        vm.expectRevert(abi.encodeWithSelector(NO_PENDING_TRANSFER.selector, _positionId));
+        positionManagerF.acceptPositionTransfer(_positionId);
     }
 
     function testTransferPositionOwnershipFailsWhenUserIsNotRegistered() public {
@@ -75,10 +144,17 @@ contract PositionManagerTest is Base {
 
         uint256 _positionId = positionManagerF.createPositionFor(_user);
 
-        vm.startPrank(_user);
+        // Step 1 emits PositionTransferInitiated.
+        vm.prank(_user);
+        vm.expectEmit(true, true, true, true);
+        emit PositionTransferInitiated(_positionId, _user, _newAddress);
+        positionManagerF.transferPositionOwnership(_newAddress);
+
+        // Step 2 emits the actual PositionIdTransferred on accept.
+        vm.prank(_newAddress);
         vm.expectEmit(true, true, true, true);
         emit PositionIdTransferred(_positionId, _user, _newAddress);
-        positionManagerF.transferPositionOwnership(_newAddress);
+        positionManagerF.acceptPositionTransfer(_positionId);
     }
 
     function testTransferPositionOwnershipFailsWhenNewAddressAlreadyHasPosition() public {

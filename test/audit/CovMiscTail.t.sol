@@ -211,6 +211,7 @@ contract CovMiscTailTest is Base {
         MockLink link = new MockLink();
         priceOracleF.setupRouter(bytes32("DON"), address(router), address(link), 1);
         priceOracleF.setupSource("return 1");
+        priceOracleF.setKeeper(address(this), true);
     }
 
     function test_oracle_fundSubscription_succeeds() public {
@@ -258,11 +259,15 @@ contract CovMiscTailTest is Base {
     }
 
     // ----------------------------------------------------------------------
-    // LibLiquidation — INSUFFICIENT_COLLATERAL and the interest-only
+    // LibLiquidation — oversized-seizure cap (open-ended) and the interest-only
     // (principalRepaid == 0) liquidation branch.
     // ----------------------------------------------------------------------
 
-    function test_liquidation_insufficientCollateral_reverts() public {
+    /// When the bonus-adjusted seizure exceeds the collateral held, open-ended
+    /// liquidation caps the seizure to what remains and scales the repayment down
+    /// (mirrors `_liquidateLoan`) rather than reverting INSUFFICIENT_COLLATERAL
+    /// (report 2026-07-02 16:28 Lead B).
+    function test_liquidation_oversizedSeizure_capsToCollateral() public {
         address liquidator = mkaddr("covLiquidator");
         createVaultAndFund(1_000e6);
         uint256 _positionId = depositCollateralFor(user1, address(token1), 4 ether); // $6,000
@@ -275,7 +280,7 @@ contract CovMiscTailTest is Base {
         updatePricefeedsData();
 
         // crash collateral so seizing the full debt's worth (+bonus) exceeds the
-        // 4 token1 actually held -> INSUFFICIENT_COLLATERAL
+        // 4 token1 actually held -> seizure is capped to the 4 token1, not reverted
         MockV3Aggregator(pricefeed1).updateAnswer(150e8); // collateral now ~$600
         assertTrue(liquidationF.isLiquidatable(_positionId));
 
@@ -283,12 +288,15 @@ contract CovMiscTailTest is Base {
         token4.mint(liquidator, _debt);
         vm.startPrank(liquidator);
         token4.approve(address(liquidationF), _debt);
-        vm.expectRevert(INSUFFICIENT_COLLATERAL.selector);
         liquidationF.liquidatePosition(_positionId, _debt, address(token4), address(token1));
         vm.stopPrank();
+
+        assertEq(token1.balanceOf(liquidator), 4 ether, "seizure capped to collateral held");
+        assertEq(gettersF.getPositionCollateral(_positionId, address(token1)), 0, "all collateral seized");
+        assertGt(token4.balanceOf(liquidator), 0, "repayment scaled below the full debt");
     }
 
-    function test_liquidation_loan_belowInterest_reverts() public {
+    function test_liquidation_loan_belowInterest_reducesPrincipal() public {
         address liquidator = mkaddr("covLiquidator2");
         createVaultAndFund(1_000e6);
         uint256 _positionId = depositCollateralFor(user1, address(token1), 5 ether); // $7,500
@@ -309,19 +317,23 @@ contract CovMiscTailTest is Base {
         MockV3Aggregator(pricefeed1).updateAnswer(1320e8);
         assertTrue(liquidationF.isLiquidatable(_positionId));
 
-        // A liquidation paying strictly less than the accrued interest must now
-        // revert (finding #3) — otherwise it would reset the interest anchor and
-        // wipe the unpaid interest while principal remained.
+        // A liquidation paying LESS than the accrued interest no longer reverts;
+        // allocation is pro-rata (#4), so even a below-interest payment retires a
+        // positive slice of principal. This is what defeats the interest-only
+        // skim: a caller can never seize collateral without reducing principal.
         uint256 _payback = _interestDue / 2;
+        uint256 _expectedPrincipalRepaid = (_payback * principalBefore) / _debt;
+        assertGt(_expectedPrincipalRepaid, 0, "below-interest payment still retires principal");
+
         token4.mint(liquidator, _payback);
         vm.startPrank(liquidator);
         token4.approve(address(liquidationF), _payback);
-        vm.expectRevert(abi.encodeWithSelector(REPAYMENT_BELOW_INTEREST.selector, _payback, _interestDue));
         liquidationF.liquidateLoan(_loanId, _payback, address(token1));
         vm.stopPrank();
 
-        // Principal is untouched because the liquidation reverted.
+        // Principal strictly decreased by the pro-rata slice.
         (,, uint256 principalAfter,,,,,,,) = gettersF.getLoanDetails(_loanId);
-        assertEq(principalAfter, principalBefore, "reverted liquidation leaves principal intact");
+        assertEq(principalAfter, principalBefore - _expectedPrincipalRepaid, "principal reduced pro-rata");
+        assertLt(principalAfter, principalBefore, "liquidation made progress on principal");
     }
 }
