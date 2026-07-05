@@ -19,3 +19,4 @@ lcov.info
 .audit-prep/
 aderyn-report.md
 slither-fresh.json
+.DS_Store
