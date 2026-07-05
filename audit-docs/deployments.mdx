@@ -1,0 +1,65 @@
+---
+title: "Deployments and risk parameters"
+sidebarTitle: "Deployments"
+description: "Live diamond addresses, collateral markets, price feeds, and risk parameters on Base and BNB Chain."
+keywords: ["deployments", "Base", "BSC", "LTV", "liquidation threshold", "price feeds"]
+---
+
+Both deployments are **collateral-only** as of 2026-07-05: no borrow vaults exist yet (`getTokenVault` returns zero for every token), so borrowing, lending, and liquidation are not yet live. `scripts/config/HelperConfig.s.sol` mirrors this state per chain and is kept in sync with on-chain changes.
+
+## Base (chain id 8453)
+
+**Diamond:** `0xEB78Ac64745162D1d3942226607d18F8B261689D`
+**Owner / request-borrow signer:** `0xb159588fc04378B8334BA49593aAa3966663ACe1` (EOA)
+
+| Collateral | Token | Price feed | LTV | Liq. threshold | Staleness |
+|---|---|---|---|---|---|
+| ETH (native sentinel) | `0x…0001` | `0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70` (ETH/USD) | 8000 | 8500 | 3600 s (default) |
+| USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | `0x7e860098F58bBFC8648a4311b374B1D669a2bc6B` | 8500 | 9000 | 90000 s |
+| DAI | `0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb` | `0x591e79239a7d679378eC8c847e5038150364C78F` | 8500 | 9000 | 90000 s |
+| USDT | `0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2` | `0xf19d560eB8d2ADf07BD6D13ed03e1D11215721F9` | 8500 | 9000 | 90000 s |
+
+<Note>
+Base stablecoin feeds have a 24-hour heartbeat, hence the 90000-second (25 h) staleness thresholds. LINK was previously listed as collateral and was removed (no outstanding deposits) in favor of USDT.
+</Note>
+
+## BNB Chain (chain id 56)
+
+**Diamond:** `0xa122e4D704B21E17955c49520F31087a67194E25`
+**Owner / request-borrow signer:** `0xb159588fc04378B8334BA49593aAa3966663ACe1` (EOA)
+
+| Collateral | Token | Price feed | LTV | Liq. threshold | Staleness |
+|---|---|---|---|---|---|
+| BNB (native sentinel) | `0x…0001` | `0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE` (BNB/USD) | 7500 | 8300 | 3600 s (default) |
+| ETH (Binance-peg) | `0x2170Ed0880ac9A755fd29B2688956BD959F933F8` | `0x9ef1B8c0E4F7dc8bF5719Ea496883DC6401d5b2e` | 8000 | 8500 | 3600 s (default) |
+| USDC | `0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d` | `0x51597f405303C4377E36123cBc172b13269EA163` | 8500 | 9000 | 3600 s (default) |
+| USDT | `0x55d398326f99059fF775485246999027B3197955` | `0xB97Ad0E74fa7d920791E90258A6E2085088b4320` | 8500 | 9000 | 3600 s (default) |
+| DAI | `0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3` | `0x132d3C0B1D2cEa0BC552588063bdBb210FDeecfA` | 8500 | 9000 | 3600 s (default) |
+
+BSC feeds update every few seconds to minutes, so the 3600-second default staleness threshold is sufficient there.
+
+## Protocol parameters (both chains)
+
+| Parameter | Value |
+|---|---|
+| Borrower APR | 2245 bps (22.45%) |
+| Penalty rate | 500 bps |
+| Utilization cap | `< 9000` bps |
+| Reserve factor (future vaults) | 100 bps |
+| Liquidation bonus (vault template) | ≤ 1000 bps |
+| Default liquidation threshold | 9000 bps |
+| Default staleness threshold | 3600 s |
+
+## Risk-parameter rationale
+
+The liquidation bonus is up to 10%, so bad debt begins when `LT × 1.10` exceeds collateral value after the price gap between threshold-crossing and liquidation execution. Parameters are sized accordingly:
+
+| Asset class | LTV / LT | Buffer to par | Rationale |
+|---|---|---|---|
+| Stablecoins | 8500 / 9000 | 10 pts | negligible gap risk |
+| ETH (both chains) | 8000 / 8500 | 15 pts | absorbs 10% bonus + ~4% adverse move |
+| BNB | 7500 / 8300 | 17 pts | fatter historical tails than ETH |
+
+<Warning>
+Invariants enforced on-chain: `LTV ≥ 1000`, `LTV ≤ effective liquidation threshold` (both directions, at registration and on every setter), `threshold ≤ 10000`. An LTV equal to its threshold — max-borrow positions instantly at the liquidation boundary — was a live misconfiguration on BSC (USDC at 9000/9000) and has been corrected; the setter permits equality, so flag any configuration that recreates it.
+</Warning>

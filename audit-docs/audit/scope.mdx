@@ -1,0 +1,85 @@
+---
+title: "Audit scope"
+description: "In-scope contracts with effective line counts, dependencies, and out-of-scope boundaries."
+keywords: ["scope", "SLOC", "contracts", "dependencies"]
+---
+
+## In scope
+
+Approximately **3,000 effective SLOC** (comments and blanks excluded) across the diamond, facets, libraries, and the vault.
+
+### Core logic (highest priority)
+
+| Contract | SLOC | Notes |
+|---|---|---|
+| `libraries/LibProtocol.sol` | 624 | Collateral, borrow, repay, tenured loans, health factor — the heart of the protocol |
+| `TokenVault.sol` | 288 | ERC4626-style vault, dual accrual legs, reserve factor, bad debt |
+| `libraries/LibVaultManager.sol` | 265 | Vault deploy/upgrade, deposits, withdrawals |
+| `libraries/LibYieldStrategy.sol` | 252 | Aave-style yield allocation, index accounting, claims, harvests |
+| `libraries/LibPriceOracle.sol` | 169 | Chainlink reads, staleness, decimal normalization, Functions plumbing |
+| `libraries/LibLiquidation.sol` | 138 | Liquidatability, conversion, bonus, settlement |
+| `libraries/LibPositionManager.sol` | 119 | Position lifecycle, whitelist, transfers |
+
+### Dispatch and support
+
+| Contract | SLOC |
+|---|---|
+| `facets/VaultManagerFacet.sol` | 106 |
+| `facets/GettersFacet.sol` | 103 |
+| `facets/PriceOracleFacet.sol` | 89 |
+| `facets/YieldStrategyFacet.sol` | 79 |
+| `facets/PositionManagerFacet.sol` | 70 |
+| `facets/ProtocolFacet.sol` | 69 |
+| `libraries/LibAppStorage.sol` | 67 |
+| `models/` (Constant, Error, Event, Protocol, Yield, FunctionParams) | 216 |
+| `facets/LiquidationFacet.sol` | 22 |
+| `libraries/SecurityBase.sol` | 34 |
+| `libraries/LibUtils.sol` | 34 |
+
+### Diamond plumbing (reference implementation)
+
+| Contract | SLOC |
+|---|---|
+| `libraries/LibDiamond.sol` | 178 |
+| `Diamond.sol` | 40 |
+| `facets/DiamondLoupeFacet.sol` | 37 |
+| `upgradeInitializers/DiamondInit.sol` | 15 |
+| `facets/OwnershipFacet.sol` | 12 |
+| `facets/DiamondCutFacet.sol` | 9 |
+
+These follow Nick Mudge's EIP-2535 reference implementation. Verify integration (storage collision, selector routing, init safety) rather than re-auditing the standard.
+
+## Out of scope
+
+- `contracts/mocks/*` — test doubles, never deployed.
+- Third-party dependencies used unmodified: OpenZeppelin v5.5.0, Chainlink v0.3.2, forge-std v1.12.0. How the in-scope code **uses** them is in scope.
+- Deployment scripts (`scripts/`) — configuration correctness matters operationally but script code is not a contract surface.
+- Anything listed in [Known issues](/audit/known-issues) — accepted risks and design decisions, re-reports will be closed as known.
+
+## Compiler and toolchain
+
+| Item | Value |
+|---|---|
+| Solidity | 0.8.30 (pragma `^0.8.30` on scripts, fixed `0.8.30` on contracts) |
+| EVM version | cancun (required by OZ v5.5.0 MCOPY) |
+| Framework | Foundry (Hardhat config present for JS deploys) |
+
+## Suggested review order
+
+<Steps>
+  <Step title="Storage and vault model">
+    `LibAppStorage`, `TokenVault` — understand the two accounting domains before anything else.
+  </Step>
+  <Step title="Money flows">
+    `LibProtocol` (borrow/repay/loans), `LibVaultManager` (deposit/withdraw), tracing every diamond ↔ vault boundary crossing.
+  </Step>
+  <Step title="Liquidation and pricing">
+    `LibLiquidation` + `LibPriceOracle` — conversion math, rounding, staleness, bonus application.
+  </Step>
+  <Step title="Yield layer">
+    `LibYieldStrategy` — index accounting, external Aave failure modes, rebalance-on-liquidation.
+  </Step>
+  <Step title="Admin and upgrade surface">
+    `SecurityBase`, `LibDiamond`, vault upgrade path, parameter setters and their invariants.
+  </Step>
+</Steps>

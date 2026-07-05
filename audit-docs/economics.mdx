@@ -1,0 +1,61 @@
+---
+title: "Economics"
+description: "Interest rate model, LP yield derivation, reserve factor, utilization cap, and penalty rates."
+keywords: ["interest rate", "APR", "APY", "reserve factor", "utilization"]
+---
+
+## Fixed-APR model
+
+HODL uses a **single protocol-wide fixed APR** (`s_interestRate`, basis points), not a utilization curve. The former `LibInterestRateModel` utilization-curve code was removed as dead code. Governance sets the rate via `setInterestRate(rate, penaltyRate)`, which also propagates it to every deployed vault so LP accrual tracks borrower pricing.
+
+Current live parameters (both chains):
+
+| Parameter | Value |
+|---|---|
+| Borrower APR | 2245 bps (22.45%) |
+| Penalty rate (post-maturity) | 500 bps |
+| Utilization cap | strict `< 90%` (`MAX_UTILIZATION = 9000`) |
+| Reserve factor (future vaults) | 100 bps (1% of interest revenue) |
+
+## How LP yield derives from borrower APR
+
+Interest accrues on **borrows** at the APR; LPs receive it net of the reserve factor, spread across **all deposits**. At maximum utilization:
+
+```text
+LP APY = APR × utilization × (1 − reserveFactor)
+       = 22.45% × 0.90 × 0.99
+       = 20.0%
+```
+
+The protocol's share is `APR × utilization × reserveFactor` ≈ 0.2% of deposits per year at the current 1% reserve factor.
+
+<Note>
+The 20% LP APY is realized only **at the utilization ceiling**. Below the cap LPs earn proportionally less; 100% utilization is disallowed by design, so up to ~10% of deposited capital is always idle — that is the exit-liquidity buffer.
+</Note>
+
+## Two accrual legs
+
+| Leg | Rate source | Governance rate change |
+|---|---|---|
+| Floating (pooled) borrows | mutable vault `interestRate` | re-prices the borrower's **entire elapsed interval** at the new rate |
+| Fixed-tenure loans | per-loan snapshotted `annualRateBps` via `fixedRateProduct` | immune |
+
+<Warning>
+Two set-once-parameter assumptions are load-bearing and documented as accepted risks:
+
+1. **Do not cut a live rate while floating borrows are open.** The vault accrues the old (higher) rate for the elapsed interval, while borrower debt re-prices at the new (lower) rate — the gap becomes an LP receivable no borrower will pay, over-booking `totalAssets()` and penalizing the last LPs to redeem.
+2. **Do not change the reserve factor while interest is accrued but unrepaid.** Accrual splits at the factor in effect per interval, but repayment re-splits the entire `interestPaid` at the current factor, drifting `totalAccruedInterest` and `totalProtocolReserve` from cash.
+
+Both trace to the same root cause (no per-position borrow-index checkpoint). See [Known issues](/audit/known-issues).
+</Warning>
+
+## Penalty on tenured loans
+
+Fixed-tenure loans accrue their snapshotted rate over the tenure, then the 500 bps penalty rate applies post-maturity. Outstanding balance = principal + tenure interest + post-maturity penalty.
+
+## Auditor checkpoints
+
+- Verify borrow capacity and utilization use consistent total-deposit and total-borrow bases across the diamond (`s_tokenVaultConfig`) and the vault (`totalBorrows`).
+- Verify `_pendingInterest` nets the reserve factor at accrual while `_doRepay` realizes the protocol slice at repayment — the split must conserve cash.
+- Verify fixed loans never accrue at the mutable rate (the `fixedRateProduct` separation).
+- The interest math floors on division: check rounding direction favors the protocol on debt (round up) and LPs are not overpaid on accrual (round down).

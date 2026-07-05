@@ -1,0 +1,64 @@
+---
+title: "Oracle system"
+description: "Chainlink AggregatorV3 valuation, staleness thresholds, decimal normalization, and Chainlink Functions plumbing."
+keywords: ["Chainlink", "oracle", "staleness", "price feed", "Chainlink Functions"]
+---
+
+## Price reads
+
+All valuation goes through `LibPriceOracle._getPriceData`, which reads the token's configured AggregatorV3 feed and validates four things:
+
+1. A feed is configured for the token (`TOKEN_NOT_SUPPORTED` otherwise).
+2. The answer is positive (`INVALID_PRICE_FEED`).
+3. `roundId == answeredInRound` (`STALE_PRICE_FEED`).
+4. `block.timestamp − updatedAt ≤ threshold` (`STALE_PRICE_FEED`), where the threshold is per-token (`s_priceFeedStalenessThreshold[token]`) falling back to `DEFAULT_STALENESS_THRESHOLD = 3600`.
+
+Oracle values feed collateral valuation, borrow capacity, health factor, liquidation eligibility, and liquidation collateral conversion.
+
+## Staleness thresholds must match feed heartbeats
+
+<Warning>
+A staleness threshold tighter than the feed's heartbeat bricks every valuation-dependent operation for that token — borrows, withdrawals with debt, and **liquidations**. This happened in production: Base's USDC/USD feed has a 24-hour heartbeat, and the 1-hour default caused `STALE_PRICE_FEED` reverts most of the day until per-token thresholds were set.
+</Warning>
+
+Current configuration:
+
+| Chain | Feed class | Heartbeat | Threshold |
+|---|---|---|---|
+| Base | stablecoins (USDC, DAI, USDT) | 24 h | 90000 s (24 h + 1 h buffer) |
+| Base | ETH/USD | minutes | default 3600 s |
+| BSC | all feeds | seconds–minutes | default 3600 s |
+
+The inverse trade-off: a threshold much wider than the heartbeat accepts prices that are genuinely stale. Auditors should check the liquidation path's behavior when a feed goes stale — liquidations revert too (fail-closed), which can delay liquidating an underwater position until the feed recovers.
+
+## Decimal normalization
+
+`_calculateTokenUSDEquivalent` scales the feed price to 18 decimals and multiplies by the token amount:
+
+```solidity
+if (_feedDecimals <= PRECISION_SCALE) {
+    scaledPrice = _price * (10 ** (PRECISION_SCALE - _feedDecimals));
+} else {
+    scaledPrice = _price / (10 ** (_feedDecimals - PRECISION_SCALE));
+}
+_usdValue = (scaledPrice * _amount) / (10 ** _decimals);
+```
+
+Both directions are handled — a feed with more than 18 decimals divides down rather than underflowing (a previously fixed lead). Verify every consumer normalizes **both** token decimals and feed decimals.
+
+## Chainlink Functions
+
+The oracle facet also carries Chainlink Functions plumbing for off-chain price discovery: router, LINK token, DON id, subscription id, and JavaScript source live in storage; keepers (`s_isKeeper`) may trigger protocol-funded refreshes.
+
+- `_handleOracleFulfillment` is restricted to the configured router (`OnlyRouterCanFulfill`).
+- `_fulfillRequest` only decodes the response when non-empty and always persists the DON error — an empty-response decode would otherwise revert the router callback and silently discard the error (previously fixed lead).
+
+<Note>
+Chainlink Functions is **not wired on either live deployment** (router, DON id, and subscription are zero on Base and BSC), and it is unavailable on BNB Chain entirely. Core valuation never depends on it — standard price feeds are the only pricing input in production.
+</Note>
+
+## Auditor checkpoints
+
+- Same-transaction price manipulation: feeds are push-based Chainlink aggregators, not spot DEX prices, so flash-loan manipulation of the valuation input is not possible; confirm no code path reads a DEX spot price.
+- Feed misconfiguration is council-gated (`setPriceFeedStalenessThreshold`, collateral registration) — a wrong feed address is a trusted-admin failure mode.
+- Check `getTokenValueInUSD(token, 0)` short-circuits to zero and that zero-price answers revert rather than valuing collateral at zero.

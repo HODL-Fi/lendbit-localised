@@ -1,0 +1,69 @@
+---
+title: "Testing"
+description: "How to build and test the codebase, what the suite covers, coverage numbers, and known gaps."
+keywords: ["Foundry", "tests", "coverage", "fuzzing", "Medusa"]
+---
+
+## Setup and commands
+
+```bash
+git clone https://github.com/LendBit-p2p/lendbit-localised.git
+cd lendbit-localised
+npm install --legacy-peer-deps   # selector-generation scripts
+forge build                      # solc 0.8.30, cancun
+
+forge test                       # full suite (390 tests)
+forge test --match-path test/Liquidation.t.sol
+forge test --match-path "test/audit/*"          # audit-regression tests
+forge coverage --ir-minimum                     # coverage (see caveats below)
+```
+
+Medusa fuzzing (27 invariants):
+
+```bash
+medusa fuzz --config medusa.json
+```
+
+## Suite layout
+
+| Path | Contents |
+|---|---|
+| `test/Protocol.t.sol`, `test/ProtocolLib.t.sol` | Collateral, borrow, repay, tenured loans |
+| `test/VaultManager.t.sol`, `test/TokenVault.t.sol` | Deposits, withdrawals, `totalAssets()` behavior |
+| `test/Liquidation.t.sol` | Liquidation success and revert cases |
+| `test/PriceOracle.t.sol` | Price reads, staleness, decimal normalization |
+| `test/PositionManager.t.sol` | Position lifecycle and transfers |
+| `test/YieldStrategy.t.sol` | Allocation, withdrawal, claim, harvest, deficit behavior |
+| `test/Integration.t.sol`, `test/deployDiamond.t.sol` | End-to-end and deployment |
+| `test/audit/` | Regression tests added during remediation rounds (e.g. `OracleCoverage.t.sol`) |
+| `test/fuzzing/` | Medusa invariant harness |
+
+## Coverage
+
+Foundry-measured (`forge coverage --ir-minimum`):
+
+| Metric | Coverage |
+|---|---|
+| Line | 79.6% (1466/1841) |
+| Statement | 77.6% (1652/2130) |
+| Branch | 71.6% (212/296) |
+| Function | 84.3% (264/313) |
+
+100% branch coverage on: ProtocolFacet, VaultManagerFacet, GettersFacet, LiquidationFacet, OwnershipFacet, YieldStrategyFacet, PriceOracleFacet, DiamondLoupeFacet, DiamondInit, LibPositionManager, LibUtils.
+
+<Note>
+The ~84 uncovered branch outcomes are dominated by branches no Solidity test can drive: Yul in `Diamond.sol`'s fallback (invisible to the coverage instrumenter), ABI-rejected enum branches, mock-only ERC20 failure paths, and defensive guards behind upstream validation. The practical Foundry ceiling on this codebase is ~85% branch. Every reachable branch in the lending, borrowing, liquidation, vault-accounting, and oracle logic is tested.
+</Note>
+
+## Known gaps — where auditor effort pays
+
+The documented weak spots in the suite, in rough priority order:
+
+1. **No broad invariant harness across arbitrary interleavings** of deposit, borrow, repay, liquidation, bad-debt, yield, and upgrade operations. The Medusa harness covers 27 targeted invariants; cross-flow sequencing is the gap.
+2. **Non-standard ERC20 coverage is limited** — FoT/rebasing are fail-closed by design, but the guards themselves have limited direct tests.
+3. **Chainlink Functions end-to-end behavior** — request/fulfillment is unit-tested; no full router round-trip.
+4. **Adversarial oracle timing** — staleness boundaries and feed-recovery sequencing around liquidations.
+5. **Storage-layout and malicious-facet upgrade testing** — diamond cuts are tested for the happy path.
+6. **Yield tests use mock Aave pools** — real-pool behaviors (liquidity crunches, rate changes) are simulated only.
+
+Writing a PoC against any of these areas is likely the fastest route to a finding this suite would not have caught.

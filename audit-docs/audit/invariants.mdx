@@ -1,0 +1,74 @@
+---
+title: "Invariants and risk surfaces"
+sidebarTitle: "Invariants"
+description: "Protocol invariants that must hold after every action, and the highest-value places to look for violations."
+keywords: ["invariants", "risk surfaces", "accounting", "health factor"]
+---
+
+## Protocol invariants
+
+These must hold after every user action, liquidation, admin action, and external integration call. A Medusa fuzzing harness (`test/fuzzing/`, 27 invariants) covers a subset; the rest are manual-review targets.
+
+### Position integrity
+
+- A user has at most one active position.
+- `s_ownerPosition[user]` and `s_positionOwner[positionId]` remain reciprocal.
+
+### Configuration consistency
+
+- Every supported borrow token maps consistently to a vault, price feed, vault config, and support flag.
+- Every supported collateral maps consistently to a price feed, LTV, liquidation threshold, and support flag.
+- `1000 ≤ LTV ≤ liquidationThreshold ≤ 10000` for every collateral, at all times (registration and every setter enforce both directions).
+
+### Accounting conservation
+
+- Diamond-level vault accounting (`s_tokenVaultConfig[token]`) stays consistent with `TokenVault` accounting (`totalBorrows`, `totalDeposits` bases).
+- Vault shares are a pro-rata claim on real `totalAssets()` — underlying balance + borrows + accrued interest must be backed by collectible debt and custody.
+- Repayment and liquidation reduce **the same debt that was actually repaid** (no double-count, no orphaned debt).
+- Yield principal and accrued yield are conserved across position-level and token-level strategy state.
+
+### Solvency
+
+- Open-ended borrows **and** fixed-tenure loans both count toward health factor and liquidation eligibility.
+- Borrow capacity and utilization use consistent total-deposit and total-borrow bases.
+- Oracle valuation normalizes both token decimals and feed decimals correctly.
+
+### Upgrade safety
+
+- Diamond cuts must not corrupt app storage, selector routing, vault mappings, or user accounting.
+- `_upgradeVault` reverts `VAULT_NOT_EMPTY` rather than stranding deposits.
+
+## Highest-value risk surfaces
+
+Ranked by where accounting bugs are most likely to hide:
+
+<AccordionGroup>
+  <Accordion title="1. Diamond ↔ vault boundary (highest)">
+    Borrow, repay, liquidation, bad-debt write-off, vault upgrade, and yield flows all update state on both sides. Trace each flow and confirm both ledgers move together, in the same units, at the same time. An update to one side only is a critical finding.
+  </Accordion>
+  <Accordion title="2. Dual accrual legs in TokenVault">
+    `totalBorrows` vs `fixedBorrows`/`fixedRateProduct` separation. Check every path that moves principal between legs (loan creation, repayment, liquidation) keeps `fixedRateProduct` = Σ principal·rate exactly.
+  </Accordion>
+  <Accordion title="3. Health factor and liquidation math">
+    Debt valuation includes accrued interest and penalties; collateral valuation applies LTV at borrow time and the liquidation threshold at liquidation time. Rounding direction on the USD→collateral conversion floors before the bonus.
+  </Accordion>
+  <Accordion title="4. ERC4626 share pricing">
+    First-deposit behavior, donation resistance, `totalAssets()` over-booking after governance parameter changes (documented accepted drift — verify the boundary of what is accepted).
+  </Accordion>
+  <Accordion title="5. Yield strategy externalities">
+    Aave pool illiquidity blocking liquidation (accepted, mitigated by yield pause), aToken balance refresh, RAY-scaled index rounding, protocol/user share split.
+  </Accordion>
+  <Accordion title="6. Signed borrow requests">
+    `_verifyBorrowSignature` field coverage, nonce replay protection, deadline handling, signer-key trust boundary. No hub-side health check by design.
+  </Accordion>
+  <Accordion title="7. Native sentinel and token edge cases">
+    `0x…0001` handling in deposit/withdraw/liquidation paths; FoT/rebasing tokens are fail-closed (not supported); `_received == _amount` closeout guards.
+  </Accordion>
+  <Accordion title="8. Position transfer integrity">
+    Two-step transfer with recipient consent, forced admin transfer, interaction with `createPositionFor`.
+  </Accordion>
+</AccordionGroup>
+
+## Previously fixed — verify, don't rediscover
+
+Recent remediation rounds fixed: minimum tenure on `_requestBorrow`, `>18`-decimal feed underflow, oracle error-before-store in `_fulfillRequest`, pause-blocks-withdrawal, yield-claim whitelist, yield-reconfigure checkpoint, ERC20-deposit-traps-ETH, the liquidation-threshold setter wrapper, and `_upgradeVault` emptiness check. Confirm the fixes are complete rather than re-reporting the originals; regression surface around each fix is fair game.

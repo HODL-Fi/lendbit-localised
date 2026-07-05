@@ -1,0 +1,72 @@
+---
+title: "HODL protocol overview"
+sidebarTitle: "Overview"
+description: "What HODL is, how it is structured, and how to navigate this documentation as an auditor."
+keywords: ["HODL", "lending", "diamond", "EIP-2535", "audit"]
+---
+
+HODL is a collateralised lending protocol for local markets, implemented as an [EIP-2535 diamond](https://eips.ethereum.org/EIPS/eip-2535). Whitelisted users create positions, deposit collateral, supply liquidity to ERC4626-style token vaults, take open-ended borrows or fixed-tenure loans, repay debt, and liquidate unsafe positions. Pricing uses Chainlink AggregatorV3 feeds; an optional Aave-style yield layer keeps a configurable slice of collateral productive.
+
+The protocol is live on two chains, both collateral-only today (no borrow vaults deployed yet):
+
+| Chain | Diamond | Collateral |
+|---|---|---|
+| Base (8453) | `0xEB78Ac64745162D1d3942226607d18F8B261689D` | native ETH, USDC, DAI, USDT |
+| BNB Chain (56) | `0xa122e4D704B21E17955c49520F31087a67194E25` | native BNB, peg-ETH, USDC, USDT, DAI |
+
+## The three-ledger mental model
+
+HODL is easiest to audit as three connected ledgers that must agree after every action:
+
+1. **Position ledger** — who owns each position, what collateral it holds, and what debt it owes. Lives in diamond storage (`LibAppStorage`).
+2. **Vault ledger** — depositor liquidity, ERC4626 shares, outstanding borrows, and accrued interest. Lives in each per-token `TokenVault`.
+3. **External-value ledger** — Chainlink prices and Aave yield balances that decide whether positions are safe and how collateral is valued.
+
+<Warning>
+The single most important risk surface is **accounting divergence between the diamond and the token vaults**. Borrow, repay, liquidation, bad-debt, vault-upgrade, and yield flows all cross this boundary. If any flow updates one side without the other, share pricing or debt accounting breaks.
+</Warning>
+
+## Where to start
+
+<Columns cols={2}>
+  <Card title="Architecture" icon="layers" href="/architecture">
+    Diamond proxy, facets, shared storage, and the TokenVault model.
+  </Card>
+  <Card title="Core flows" icon="git-branch" href="/flows">
+    Deposit, borrow, repay, tenured loans, and liquidation step by step.
+  </Card>
+  <Card title="Audit scope" icon="crosshair" href="/audit/scope">
+    In-scope contracts with line counts, and what is out of scope.
+  </Card>
+  <Card title="Known issues" icon="shield-alert" href="/audit/known-issues">
+    Accepted risks and design decisions — do not re-report these.
+  </Card>
+</Columns>
+
+## Repository layout
+
+```text
+contracts/
+  Diamond.sol                # Diamond proxy entry point
+  TokenVault.sol             # ERC4626-style vault for lender liquidity
+  facets/                    # 10 facet contracts (dispatch surface)
+  libraries/                 # Lib* implementation logic + SecurityBase
+  models/                    # Shared structs, errors, events, constants
+  mocks/                     # Test doubles — NOT deployed, out of scope
+scripts/
+  DeployLendbit.s.sol        # Production config-driven deploy
+  config/HelperConfig.s.sol  # Per-chain config, mirrors live deployments
+test/                        # Foundry suites incl. audit/ and fuzzing/
+```
+
+## Toolchain
+
+```bash
+npm install --legacy-peer-deps   # selector-generation scripts need node
+forge build                      # solc 0.8.30, evm_version cancun
+forge test                       # 390 tests
+```
+
+<Note>
+`evm_version = 'cancun'` is required by OpenZeppelin v5.5.0 (MCOPY) and is supported on both Base (Ecotone) and BNB Chain (Tycho).
+</Note>

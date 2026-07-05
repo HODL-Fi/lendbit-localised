@@ -1,0 +1,60 @@
+---
+title: "Known issues and accepted risks"
+sidebarTitle: "Known issues"
+description: "Intentional limitations and accepted risks recorded at audit handoff — findings duplicating these will be closed as known."
+keywords: ["known issues", "accepted risks", "design decisions"]
+---
+
+<Info>
+This page condenses `KNOWN_ISSUES.md` (repo root, last updated 2026-06-30). It exists so accepted risks are not re-reported as new findings. The repo file is authoritative.
+</Info>
+
+## Accepted design decisions
+
+### Cross-chain borrows have no hub-side health check
+
+`_requestBorrow` performs no on-chain collateral or health check on the hub. Cross-chain borrows are **spoke-collateralized**: collateral lives on the spoke chain, the health check runs there at attestation time, and the result is carried by the signed request. A hub-side check would read zero collateral and revert every legitimate request. Defence-in-depth: optional signed `deadline`, single-use nonces, and the minimum tenure (`ONE_DAY`) now enforced on `_requestBorrow`.
+
+### Fixed APR re-prices open floating positions on a rate change
+
+`s_interestRate` is a set-once-style rate. Changing it re-prices the full elapsed interval of open pooled borrows. Two derived consequences, both accepted **only under the set-once posture**:
+
+- **Rate cut with open floating borrows** — the vault keeps the old (higher) accrual for the elapsed interval while borrower debt re-prices at the new (lower) rate. The gap is an LP receivable no borrower will pay; `totalAssets()` over-books and the last LPs to redeem bear the shortfall. Fixed-term loans are immune (snapshotted rates).
+- **Reserve-factor change between accrual and repayment** — accrual splits interest at the factor in effect per interval, repayment re-splits the whole `interestPaid` at the current factor; `totalAccruedInterest` and `totalProtocolReserve` drift from cash.
+
+Operational rule: do not cut a live rate or change the reserve factor while floating interest is accrued and unrepaid. The structural remedy (per-position borrow-index checkpoints) is known and deferred.
+
+### LP yield is capped by utilization
+
+`MAX_UTILIZATION` is a strict `< 90%`, so ~10% of deposits are always idle (the exit buffer). The APR is grossed up so LPs realize the target APY **at the ceiling**; below it they earn proportionally less. Full APY at 100% utilization is unreachable by design.
+
+### Privileged roles are trusted
+
+The security council can set rates, reserve factors, pause vaults, write off bad debt, force-transfer positions, and upgrade vaults. Council-only footguns are not vulnerabilities.
+
+### Fee-on-transfer and rebasing tokens are fail-closed, not supported
+
+Deposits credit the balance actually received (tolerant), but every repay and liquidation closeout asserts `_received == _amount` and reverts on shortfall. A FoT borrow token would be unrepayable; a rebasing collateral would desync recorded vs real backing. Both are excluded by council-only token listing; the correct fix if ever needed is onboarding-time rejection, not loosening the closeout guard. Standard 6–18-decimal tokens are unaffected.
+
+### Open onboarding via createPositionFor
+
+Anyone may create a position **for** a whitelisted address; it vests to that user, not the caller. The whitelist gates who can hold positions, and deposit paths auto-create anyway. Left open to support operator/relayer onboarding.
+
+### Coarse 0-decimal collateral can be un-liquidatable in dust
+
+`_getAmountToLiquidate` floors the USD→collateral conversion to whole token units before the bonus. Sub-unit residual debt against a 0-decimal, very-high-priced collateral rounds seizure to zero and reverts (fail-closed). Round-up would over-liquidate, so the behavior is retained; the resolution is to never list such tokens.
+
+## Accepted external-dependency and dust leads
+
+- **Aave withdrawal can block liquidation** — inherent to an external money market; mitigated by `setYieldPause` so liquidation seizes liquid collateral directly.
+- **Yield withdraw ignores Aave's returned amount** — a concrete amount is always passed (never `max`), and the aToken balance is re-read afterward; no drift for standard pools.
+- **Native-repay branch is dead code** — the native token is collateral-only; no vault, no native borrow, no native repay.
+- **Yield-index dust** — RAY-scaled index only zeroes a non-zero share above ~1e27 total principal.
+
+## Coverage ceiling
+
+390 tests pass, plus a 27-invariant Medusa fuzzer and a 150k-call arithmetic soak. Branch coverage is 71.6% and cannot reach 90% via Foundry: the residual is Yul in `Diamond.sol`'s fallback (invisible to the instrumenter), ABI-rejected branches, mock-only failure paths, and defensive guards behind upstream validation. Every reachable branch in lending, borrowing, liquidation, vault-accounting, and oracle logic is tested. See [Testing](/audit/testing).
+
+## Still-open leads worth manual review
+
+Older leads not re-examined in the latest validation pass: stale-feed liquidation DoS, liquidation close-factor / collateral-choice, cross-position yield sourcing, `encodePacked` signature construction, and admin force-transfer. These are fair game for auditors — see the audit reports in the repo root for context.

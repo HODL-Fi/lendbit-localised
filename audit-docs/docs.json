@@ -1,0 +1,41 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "HODL Protocol — Auditor Documentation",
+  "colors": {
+    "primary": "#2200FF",
+    "light": "#7A66FF",
+    "dark": "#2200FF"
+  },
+  "favicon": "/favicon.png",
+  "navigation": {
+    "groups": [
+      {
+        "group": "Protocol",
+        "pages": [
+          "index",
+          "architecture",
+          "flows",
+          "economics",
+          "oracles",
+          "access-control",
+          "deployments"
+        ]
+      },
+      {
+        "group": "Audit guide",
+        "pages": [
+          "audit/scope",
+          "audit/invariants",
+          "audit/known-issues",
+          "audit/testing"
+        ]
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/LendBit-p2p/lendbit-localised"
+    }
+  }
+}

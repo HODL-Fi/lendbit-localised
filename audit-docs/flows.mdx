@@ -1,0 +1,81 @@
+---
+title: "Core flows"
+description: "Step-by-step state transitions for deposits, borrows, repayments, tenured loans, and liquidations."
+keywords: ["borrow", "repay", "liquidation", "tenured loan", "deposit", "withdraw"]
+---
+
+Every flow below crosses the diamond ↔ vault accounting boundary at least once. When auditing, verify that each step updates **both** ledgers or neither.
+
+## Liquidity deposit and withdrawal
+
+<Steps>
+  <Step title="Deposit — VaultManagerFacet.deposit">
+    Validate token support → create position if needed → increase `s_tokenVaultConfig[token].totalDeposits` → transfer tokens from user to diamond → approve vault → `TokenVault.deposit` mints ERC4626 shares to the depositor.
+  </Step>
+  <Step title="Withdraw — VaultManagerFacet.withdraw">
+    Validate support and position → reduce `totalDeposits` → `TokenVault.withdraw` burns shares and transfers underlying to the user.
+  </Step>
+</Steps>
+
+## Collateral deposit and withdrawal
+
+<Steps>
+  <Step title="Deposit — ProtocolFacet.depositCollateral">
+    Validate amount → require whitelist → create position if needed → require collateral support → increase `s_positionCollateral[positionId][token]` → transfer ERC20 in (or accept `msg.value` for the native sentinel) → rebalance into yield strategy if configured.
+  </Step>
+  <Step title="Withdraw — ProtocolFacet.withdrawCollateral">
+    Resolve position → check recorded collateral → decrease it → recompute health factor → revert if debt exists and health factor would fall below minimum → unwind yield allocation if needed → transfer collateral out.
+  </Step>
+</Steps>
+
+## Open-ended borrow and repay
+
+<Steps>
+  <Step title="Borrow — ProtocolFacet.borrow">
+    Resolve position → require supported borrow token → check vault utilization (strict `< 90%`) → price the borrow in USD → check post-borrow health factor → update `s_positionBorrowed` and `s_positionBorrowedLastUpdate` → update diamond-level vault borrows → `TokenVault.borrow` transfers tokens to the borrower.
+  </Step>
+  <Step title="Repay — ProtocolFacet.repay">
+    Resolve position → compute current debt with accrued interest → cap repayment at outstanding debt → reduce `s_positionBorrowed` → update timestamps → reduce diamond-level vault borrows → `TokenVault.repay` → transfer repayment tokens to the vault.
+  </Step>
+</Steps>
+
+<Note>
+Repay and liquidation closeouts assert `_received == _amount` and revert on shortfall — fee-on-transfer borrow tokens are fail-closed by design, not supported.
+</Note>
+
+## Fixed-tenure loans
+
+Two creation paths:
+
+- **`takeLoan`** — caller-driven.
+- **`requestBorrow`** — signature-driven for cross-chain borrows. Verifies the action string, position id, token, amount, tenure, source/target chain ids, nonce (replay-protected via `s_requestBorrowNonceUsed`), contract address, wallet, and the configured `s_requestBorrowSigner`. Minimum tenure (`ONE_DAY`) is enforced on both paths.
+
+<Warning>
+`requestBorrow` performs **no hub-side collateral or health check**. Cross-chain borrows are spoke-collateralized: the health check runs on the spoke chain at attestation time and the result is carried by the signature. This is intentional — see [Known issues](/audit/known-issues). The signer is a single trusted key; its compromise is equivalent to unbacked minting of debt.
+</Warning>
+
+Creation: validate position, token support, tenure, utilization, collateral value, health factor → create `Loan` with status `FULFILLED` → increment `s_nextLoanId` → append to `s_positionActiveLoanIds` → increase diamond-level vault borrows → `TokenVault.borrow`.
+
+Repayment (`repayLoan` / `repayLoanFor`): outstanding = principal + tenure interest + post-maturity penalty → cap at outstanding → update repaid amount, principal, start timestamp → on full repayment mark `REPAID` and move to closed loans → transfer tokens to vault → reduce diamond-level borrows → `TokenVault.repay`.
+
+## Liquidation
+
+Both debt types are liquidatable. A position is liquidatable when debt value exceeds collateral value × the per-token liquidation threshold.
+
+<Steps>
+  <Step title="Eligibility">
+    Confirm the position or loan is liquidatable and the selected collateral exists.
+  </Step>
+  <Step title="Conversion">
+    Validate liquidator allowance/balance → convert the repayment amount to collateral units at oracle prices → add the configured liquidation bonus (vault-configured, ≤ 1000 bps).
+  </Step>
+  <Step title="Settlement">
+    Reduce recorded collateral → unwind yield allocation for the withdrawn collateral → reduce loan or open-ended debt → transfer repayment into the vault → transfer seized collateral to the liquidator.
+  </Step>
+</Steps>
+
+Auditor checkpoints on this path:
+
+- The USD→collateral conversion **floors to integer token units before the bonus** — for a 0-decimal high-value collateral with sub-unit residual debt, seizure rounds to zero and the liquidation reverts (fail-closed, accepted).
+- Liquidation unwinds Aave yield allocations via `IAavePool.withdraw`; an illiquid external pool can block liquidation. Mitigation: the council pauses yield for the token so liquidation seizes liquid collateral directly.
+- The liquidation bonus interacts with the liquidation threshold: at threshold `LT` and bonus `b`, bad debt begins when `LT × (1 + b) > 100%` plus price gap. Current parameters are sized so natives keep 15–17 points of buffer to par — see [Deployments](/deployments).

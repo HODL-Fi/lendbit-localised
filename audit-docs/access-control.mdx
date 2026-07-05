@@ -1,0 +1,58 @@
+---
+title: "Access control"
+description: "Roles, trust assumptions, and the modifier surface auditors should verify."
+keywords: ["access control", "security council", "guardian", "whitelist", "roles"]
+---
+
+## Role hierarchy
+
+| Role | Mechanism | Powers |
+|---|---|---|
+| **Security council** (diamond owner) | `LibDiamond.contractOwner()`, checked by `onlySecurityCouncil` | Everything: diamond cuts, vault deploy/upgrade, risk parameters, rates, pause/resume, whitelist, force-transfer positions, oracle config, yield config and harvest, ownership transfer |
+| **Guardian** | `s_isGuardian[addr]`, checked by `onlyGuardianOrCouncil` | **Pause-direction actions only** — unpause/resume stays council-only |
+| **Keeper** | `s_isKeeper[addr]` | Trigger protocol-funded Chainlink Functions refreshes |
+| **Whitelister** | `isWhitelisted` management delegation | Onboard users |
+| **Request-borrow signer** | `s_requestBorrowSigner`, ECDSA verification | Attests cross-chain (spoke-collateralized) borrow requests |
+| **Whitelisted user** | `isWhitelisted[user]` | Position-related lending and borrowing actions |
+
+```solidity
+// SecurityBase.sol
+function _onlySecurityCouncil() internal view {
+    if (msg.sender != LibDiamond.contractOwner()) revert ONLY_SECURITY_COUNCIL();
+}
+
+function _onlyGuardianOrCouncil() internal view {
+    if (msg.sender != LibDiamond.contractOwner()
+        && !LibAppStorage.appStorage().s_isGuardian[msg.sender]) revert NOT_GUARDIAN();
+}
+```
+
+`TokenVault` privileged operations are `onlyDiamond` — only the diamond proxy may call borrow/repay/rate-set/reserve operations on vaults.
+
+## Trust assumptions
+
+<Info>
+Privileged roles are **trusted by design**. Council-only footguns (bad rate changes, wrong feed addresses, pausing at a bad time) are documented operational assumptions, not vulnerabilities — consistent with standard platform judging rules for admin actions. The interesting audit surface is what an **unprivileged** or **whitelisted-but-malicious** actor can do.
+</Info>
+
+Trust notes that matter for severity classification:
+
+- **The request-borrow signer is a single EOA-style key.** Its compromise lets an attacker mint unbacked tenured debt on the hub (no hub-side collateral check exists for cross-chain borrows — accepted design). Signature verification covers action, position, token, amount, tenure, chain ids, nonce, contract, and wallet; nonces are single-use.
+- **Live deployments are owned by an EOA**, not a multisig (`0xb159588fc04378B8334BA49593aAa3966663ACe1` on both chains). The deployment runbook (`DEPLOY.md`) prescribes transferring to a security-council Safe; that transfer has not happened yet. Treat this as a deployment-state observation, not a code finding.
+- Whitelisting gates all position-facing user flows; `createPositionFor(_user)` is intentionally open (the position vests to the named whitelisted user, not the caller).
+
+## Reentrancy
+
+`SecurityBase` provides a storage-flag reentrancy guard (`s_reentrancyStatus`) applied on state-mutating user entry points (`nonReentrant` on `depositCollateral`, `withdrawCollateral`, `liquidateLoan`, `liquidatePosition`, etc.). External call surfaces to check:
+
+- ERC20 transfers (including the native sentinel's raw value transfer on withdrawal)
+- `TokenVault` calls (trusted, diamond-owned)
+- Aave pool `supply`/`withdraw` in the yield layer (external, partially trusted)
+- Chainlink Functions router
+
+## Auditor checkpoints
+
+- Enumerate every `external`/`public` state-mutating function in the facets and confirm the correct modifier: `onlySecurityCouncil`, `onlyGuardianOrCouncil`, whitelist check, or intentionally open.
+- Verify pause coverage is symmetric: everything that mutates vault/position economics should respect the paused state, not just the obvious entry points.
+- Verify the two-step position transfer's recipient-consent step cannot be front-run or bypassed via `createPositionFor`.
+- Diamond cuts are owner-gated; check `DiamondCutFacet` cannot be reached through any other selector path.
