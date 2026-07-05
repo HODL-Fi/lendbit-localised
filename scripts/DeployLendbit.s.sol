@@ -96,6 +96,12 @@ contract DeployLendbit is Script, IDiamondCut {
         for (uint256 i; i < cfg.collaterals.length; i++) {
             HelperConfig.CollateralAsset memory a = cfg.collaterals[i];
             protocol.addCollateralToken(a.token, a.priceFeed, a.ltv);
+            if (a.liquidationThreshold != 0) {
+                protocol.setCollateralLiquidationThreshold(a.token, a.liquidationThreshold);
+            }
+            if (a.stalenessThreshold != 0) {
+                oracle.setPriceFeedStalenessThreshold(a.token, a.stalenessThreshold);
+            }
             console.log("collateral added   :", a.label, a.token);
         }
 
@@ -113,6 +119,9 @@ contract DeployLendbit is Script, IDiamondCut {
                 lastUpdated: block.timestamp
             });
             address v = vaults.deployVault(b.token, b.priceFeed, b.name, b.symbol, vc);
+            if (b.stalenessThreshold != 0) {
+                oracle.setPriceFeedStalenessThreshold(b.token, b.stalenessThreshold);
+            }
             console.log("vault deployed     :", b.symbol, v);
         }
 
