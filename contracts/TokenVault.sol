@@ -123,6 +123,12 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         addressZeroCheck(_asset)
         addressZeroCheck(_diamond)
     {
+        // Defence-in-depth: reject an out-of-range reserve factor at construction,
+        // mirroring `setReserveFactor`. A value above 100% makes `_pendingInterest`
+        // underflow (`BASIS_POINTS_SCALE_256 - reserveFactor`) and is unrecoverable
+        // after deployment. Protocol deploy paths already gate this via
+        // `_validateVaultConfigBounds`; this closes the direct-construction gap (#L-10).
+        if (_reserveFactor > Constants.BASIS_POINTS_SCALE) revert InvalidRate();
         diamond = _diamond;
         lastUpdateTimestamp = block.timestamp;
         interestRate = _interestRate;

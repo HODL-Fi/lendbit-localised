@@ -50,6 +50,10 @@ contract YieldStrategyFacet is SecurityBase {
     /// @param _token The token to rebalance
     function rebalanceMyPosition(address _token) external nonReentrant {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        // Honour the whitelist/blacklist freeze for parity with `claimYield` and every
+        // other position-touching entrypoint (#M-07). Rebalance moves a blacklisted
+        // user's collateral to/from Aave; a frozen position must stay inert.
+        s._addressIsWhitelisted(msg.sender);
         uint256 _positionId = s._getPositionIdForUser(msg.sender);
         if (_positionId == 0) revert NO_POSITION_ID(msg.sender);
         LibYieldStrategy._rebalancePosition(s, _positionId, _token);

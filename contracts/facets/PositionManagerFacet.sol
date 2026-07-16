@@ -64,9 +64,11 @@ contract PositionManagerFacet is SecurityBase {
 
     /// @notice Add an address to the whitelist, permitting it to interact with the protocol.
     /// @dev Callable by the security council OR a delegated whitelister (e.g. an
-    ///      automated onboarding backend). Whitelisting only grants access — it cannot
-    ///      move funds — so it is safe to delegate to a hot key. Blacklisting is NOT
-    ///      delegated (see `blacklistAddress`).
+    ///      automated onboarding backend). Delegating to a hot key is safe because
+    ///      whitelisting CANNOT reverse a council blacklist: `_whitelistAddress`
+    ///      reverts on any address carrying the council tombstone (#M-05). Only the
+    ///      council can clear that tombstone (`unblacklistAddress`). Blacklisting
+    ///      itself is NOT delegated (see `blacklistAddress`).
     /// @param _user The address to whitelist
     function whitelistAddress(address _user) external {
         LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
@@ -76,13 +78,24 @@ contract PositionManagerFacet is SecurityBase {
         LibPositionManager._whitelistAddress(s, _user);
     }
 
-    /// @notice Remove an address from the whitelist (only security council).
+    /// @notice Remove an address from the whitelist and set the council blacklist
+    ///         tombstone (only security council).
     /// @dev NOT delegated to whitelisters: a blacklist freezes the user's deposits,
     ///      borrows, collateral, yield claims, and vault withdrawals, so its blast
-    ///      radius is kept off any automated hot key.
+    ///      radius is kept off any automated hot key. The tombstone additionally
+    ///      prevents the whitelister path from silently re-admitting the user (#M-05).
     /// @param _user The address to blacklist
     function blacklistAddress(address _user) external onlySecurityCouncil {
         LibPositionManager._blacklistAddress(LibAppStorage.appStorage(), _user);
+    }
+
+    /// @notice Clear the council blacklist tombstone for `_user` (only security council).
+    /// @dev Does NOT re-whitelist. Re-admission is a separate, deliberate
+    ///      `whitelistAddress` call after the tombstone is cleared, keeping the
+    ///      asymmetric council-only reversal explicit (#M-05).
+    /// @param _user The address to un-blacklist
+    function unblacklistAddress(address _user) external onlySecurityCouncil {
+        LibPositionManager._unblacklistAddress(LibAppStorage.appStorage(), _user);
     }
 
     /// @notice Grant or revoke the delegated whitelister capability (only security council).

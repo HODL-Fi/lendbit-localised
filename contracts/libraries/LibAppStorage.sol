@@ -118,6 +118,14 @@ library LibAppStorage {
         // guardian can grief but can never turn protection back off. Appended at the
         // end for upgrade-safe layout.
         mapping(address => bool) s_isGuardian;
+        // Council blacklist tombstone, separate from `isWhitelisted` membership. A
+        // council blacklist sets this true; the delegated whitelister path
+        // (`_whitelistAddress`) refuses to re-whitelist any address carrying the
+        // tombstone, so a hot-key whitelister — or a stray re-registration call —
+        // can no longer silently reverse a council blacklist (#M-05). Only the
+        // council clears it (`_unblacklistAddress`). Appended at the end for
+        // upgrade-safe layout.
+        mapping(address => bool) s_blacklisted;
     }
 
     bytes32 internal constant STORAGE_SLOT = keccak256("contracts.storage.LibAppStorage");
