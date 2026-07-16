@@ -24,7 +24,7 @@ Fixes split by **upgrade surface**, because the protocol has two:
 | L-10 unbounded reserve factor | Low | vault ctor | Fixed | `fe54d59` |
 | M-09 fixed-leg invariant break | Med | vault | Fixed, **staged for redeploy** | `0ec0420` |
 | M-04 blacklist bypass via shares | Med | vault | Fixed, **staged for redeploy** | `0ec0420` |
-| M-03 vault/borrower receivable mismatch | Med | vault | **Deferred — design decision** | — |
+| M-03 vault/borrower receivable mismatch | Low (accepted) | vault | **Accepted — no code change** | — |
 
 Tests: `Track1Remediation.t.sol` (10), `PenaltyDoubleCharge.t.sol` (2),
 `Track2VaultFixes.t.sol` (5). Full suite **467 passing**, no regressions.
@@ -41,40 +41,37 @@ The Base/BSC vaults run the pre-fix bytecode until they can be emptied and
 - **M-04** — the LP-share transfer leg is unguarded on the live vault. Blacklist is
   **best-effort** on shares there; the reliable freeze exists only once the fixed
   bytecode ships. Pause does **not** contain it (withdraw stays open by design).
-- **M-03** — see below.
+- **M-03** — accepted as Low, see below (no code change; not a residual that needs
+  a redeploy).
 
-## M-03 — deferred pending design (this is the design ticket)
+## M-03 — accepted as Low (no code change)
 
-**Root cause.** `TokenVault._pendingInterest` accrues fixed interest continuously
-from one aggregate, `fixedRateProduct = Σ(principal·rate)`, at base rate with **no
-maturity cap and no penalty**. The borrower's `LibProtocol._outstandingBalance`
-caps base at maturity and then accrues *penalty* rate. The vault cannot reconcile
-them because it holds no per-loan maturity or penalty data — that lives diamond-side.
+**Decision (team, this remediation round).** Two facts settle it:
 
-**Impact (per review, corrected).** ~5.87% APR LP under-valuation post-maturity
-(base over-accrual ~77% offsets omitted penalty), plus a ~0.35% risk-free deposit
-sandwich at the repay discontinuity (`_doRepay` floors `totalAccruedInterest` at 0,
-so `totalAssets` steps up when a repayment realizes penalty). Medium; partially
-self-correcting; sandwich is weak behind Base's sequencer.
+1. **No LP ever receives less than base.** The vault accrues at least the base rate
+   on outstanding principal continuously (`TokenVault._pendingInterest`), even past
+   maturity — it never credits less than base. Every M-03 number is measured against
+   a *penalty-inclusive* receivable, so the "under-valuation" is about penalty
+   (extra), never the base yield LPs signed up for.
+2. **Penalty may be shared LP/protocol.** Current behavior — `_doRepay` splits the
+   repaid interest+penalty by `reserveFactor` (~protocol cut) with the remainder to
+   LPs — is intended and acceptable.
 
-**Why deferred.** A wrong change to live share-pricing math is more dangerous than
-the Medium it fixes. It is not a mechanical edit (unlike M-09) — it requires giving
-the vault maturity/penalty awareness it does not have.
+Under those two facts the "~5.87% APR under-valuation" is **not a harm**: it is a
+benign timing effect that redistributes penalty *upside* by holding time (an LP who
+exits mid-overdue forgoes penalty not yet booked; whoever holds at repayment gets
+it) and self-corrects at repayment. No principal or base yield is ever at risk.
 
-**Design options to decide before implementing:**
+**Residual (accepted).** The penalty lands as a discrete step at repayment rather
+than accruing smoothly, so a depositor could sandwich a repayment (deposit before,
+withdraw after) to skim ~0.35% of the penalty step from sitting LPs. It needs
+mempool visibility (weak behind Base's sequencer) and skims penalty upside, never
+anyone's base. Accepted as Low — not worth a redesign of live share-pricing math.
 
-1. **Diamond as source of truth (preferred).** The diamond computes exact per-loan
-   `_outstandingBalance`; have it drive/reconcile the vault's fixed receivable
-   instead of the vault accruing blind. Correct; cost is aggregate maintenance /
-   periodic checkpoints + gas.
-2. **Maturity-aware vault buckets.** `borrowFixed` records each loan's maturity +
-   penalty rate; `_pendingInterest` caps base at maturity and switches to penalty.
-   Self-contained but new storage and highest risk (pricing depends on it per block).
-3. **Sandwich-only mitigation.** Neutralize the ~0.35% extractable step at the repay
-   discontinuity; leave the ~5.87% drift. Smallest, safest; not a true unification.
-
-The design pass must resolve: where the reconciliation lives, gas budget, and how it
-interacts with the M-09 cap-and-scale already added to `_doRepay`.
+**If ever revisited (optional, not scheduled).** The only proportionate change is to
+stop the penalty step from being instantaneously capturable (sandwich-only
+mitigation). The full accrual redesign (diamond-driven, or maturity-aware vault
+buckets) is not warranted for a benign timing effect.
 
 ## Structural finding — vaults are not upgradeable
 
