@@ -112,6 +112,15 @@ contract PositionManagerFacet is SecurityBase {
         return LibPositionManager._isWhitelister(LibAppStorage.appStorage(), _user);
     }
 
+    /// @notice Return whether an address carries the council blacklist tombstone.
+    /// @dev Consumed by `TokenVault._update` to freeze LP-share transfers for
+    ///      blacklisted parties (#M-04), and available to integrators.
+    /// @param _user The address to check
+    /// @return True if the address is council-blacklisted
+    function isBlacklisted(address _user) external view returns (bool) {
+        return LibPositionManager._isBlacklisted(LibAppStorage.appStorage(), _user);
+    }
+
     /// @notice Set the trusted signer whose signature authorizes cross-chain borrow requests (only security council).
     /// @param _signer The new request-borrow signer address
     function setRequestBorrowSigner(address _signer) external onlySecurityCouncil {

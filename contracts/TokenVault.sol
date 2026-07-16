@@ -8,6 +8,12 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {Constants} from "./models/Constant.sol";
 
+/// @notice Minimal view into the diamond's council blacklist tombstone, queried by
+///         the share-transfer freeze (#M-04). Backed by `PositionManagerFacet`.
+interface IDiamondBlacklistView {
+    function isBlacklisted(address user) external view returns (bool);
+}
+
 /**
  * @title Lendbit VTokenVault
  * @author Lendbit Protocol
@@ -133,6 +139,21 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         lastUpdateTimestamp = block.timestamp;
         interestRate = _interestRate;
         reserveFactor = _reserveFactor;
+    }
+
+    /// @notice Freeze LP-share transfers for council-blacklisted parties (#M-04).
+    /// @dev Only peer-to-peer transfers are gated here. Mint (deposit) and burn
+    ///      (withdraw) route through the diamond, which already enforces the
+    ///      whitelist/blacklist freeze, so `from`/`to == address(0)` is left alone.
+    ///      LP shares are the one position component represented as a transferable
+    ///      ERC-20; without this a blacklisted holder moves shares to a clean address
+    ///      that then withdraws, bypassing the freeze on every other path.
+    function _update(address from, address to, uint256 value) internal override {
+        if (from != address(0) && to != address(0)) {
+            IDiamondBlacklistView _d = IDiamondBlacklistView(diamond);
+            if (_d.isBlacklisted(from) || _d.isBlacklisted(to)) revert TransferNotAllowed();
+        }
+        super._update(from, to, value);
     }
 
     /**
@@ -364,6 +385,19 @@ contract TokenVault is ERC4626, ReentrancyGuard {
                 fixedRateProduct =
                     _productReduction >= fixedRateProduct ? 0 : fixedRateProduct - _productReduction;
             }
+        }
+
+        // Restore the invariant fixedBorrows <= totalBorrows (#M-09). A floating
+        // (pooled) repayment reduces totalBorrows without touching the fixed leg; if a
+        // prior bad-debt writeoff had driven fixedBorrows up to totalBorrows, the
+        // floating repay would leave fixedBorrows > totalBorrows, so fixedRateProduct
+        // keeps accruing on phantom principal — inflating share price on interest no
+        // borrower owes. Mirror the cap-and-scale from updateBadDebt. No-op on a fixed
+        // repay, where both legs already moved by the same principal.
+        if (fixedBorrows > totalBorrows) {
+            uint256 _newFixed = totalBorrows;
+            fixedRateProduct = fixedBorrows == 0 ? 0 : (fixedRateProduct * _newFixed) / fixedBorrows;
+            fixedBorrows = _newFixed;
         }
 
         uint256 _reserve = (interestPaid * reserveFactor) / Constants.BASIS_POINTS_SCALE_256;
