@@ -105,6 +105,12 @@ library LibProtocol {
         if (_principal == 0) revert AMOUNT_ZERO();
         if (!s.s_supportedToken[_token]) revert TOKEN_NOT_SUPPORTED(_token);
         if (_tenureSeconds < Constants.ONE_DAY) revert TENURE_TOO_SHORT();
+        // Bound tenure above so `_originationTime + tenureSeconds` (maturity, computed
+        // in `_outstandingBalance`) cannot overflow uint256 and brick the loan's repay
+        // path — permanently stranding the borrower's collateral with no recovery (#H-01).
+        if (_tenureSeconds > type(uint256).max - block.timestamp) {
+            revert TENURE_TOO_LONG(_tenureSeconds, type(uint256).max - block.timestamp);
+        }
         if (!s._validateVaultUtlization(_token, _principal)) revert TOKEN_OVERUTILIZATION();
 
         (, uint256 _currentBorrowValue) = s._getTokenValueInUSD(_token, _principal);
@@ -193,6 +199,11 @@ library LibProtocol {
         // — a hub health check would revert every legitimate request. See
         // KNOWN_ISSUES.md §2.)
         if (_request.tenureSeconds < Constants.ONE_DAY) revert TENURE_TOO_SHORT();
+        // Same maturity-overflow bound as `_takeLoan` (#H-01): a request-borrow loan
+        // reaches the identical `_outstandingBalance` maturity computation.
+        if (_request.tenureSeconds > type(uint256).max - block.timestamp) {
+            revert TENURE_TOO_LONG(_request.tenureSeconds, type(uint256).max - block.timestamp);
+        }
 
         if (!s._validateVaultUtlization(_request.token, _request.amount)) revert TOKEN_OVERUTILIZATION();
 
@@ -905,9 +916,18 @@ library LibProtocol {
             / (Constants.BASIS_POINTS_SCALE_256 * Constants.ONE_YEAR);
         uint256 _totalOwed = _loan.principal + _interest;
 
-        // Penalty accrues against the fixed maturity, not the moving anchor.
-        if (_timestamp > _maturity) {
-            uint256 penaltyTime = _timestamp - _maturity;
+        // Penalty accrues from the later of maturity and the last settlement point.
+        // The interest anchor `startTimestamp` is advanced by a valid repayment ONLY
+        // after that repayment has fully settled the accrued interest+penalty to date
+        // (`_repayLoanFor` interest-first guard `_amount >= _interestDue`), so
+        // `startTimestamp > _maturity` implies penalty was already paid up to
+        // `startTimestamp`. Liquidation never advances the anchor, so its surviving
+        // principal keeps accruing penalty from maturity. Flooring the penalty window
+        // here stops a partial repayment on an overdue loan from re-charging the whole
+        // post-maturity penalty window on the surviving principal every block (#M-02).
+        uint256 _penaltyStart = _loan.startTimestamp > _maturity ? _loan.startTimestamp : _maturity;
+        if (_timestamp > _penaltyStart) {
+            uint256 penaltyTime = _timestamp - _penaltyStart;
             uint256 penalty = (_totalOwed * (uint256(_loan.annualRateBps) + _loan.penaltyRateBps) * penaltyTime)
                 / (Constants.BASIS_POINTS_SCALE_256 * Constants.ONE_YEAR);
             _totalOwed += penalty;

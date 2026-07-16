@@ -112,13 +112,34 @@ library LibPositionManager {
     }
 
     /// @notice Marks `_user` as whitelisted.
+    /// @dev Refuses to re-whitelist an address the council has blacklisted (#M-05).
+    ///      Whitelisting is delegable to a hot-key whitelister, but blacklisting is
+    ///      council-only; without this guard the whitelister path — or any stray
+    ///      re-registration/backfill call — silently reverses a council blacklist.
+    ///      The council clears the tombstone via `_unblacklistAddress` before any
+    ///      re-admission.
     function _whitelistAddress(LibAppStorage.StorageLayout storage s, address _user) internal {
+        if (s.s_blacklisted[_user]) revert ADDRESS_BLACKLISTED(_user);
         s.isWhitelisted[_user] = true;
     }
 
-    /// @notice Removes `_user` from the whitelist.
+    /// @notice Blacklists `_user`: removes whitelist membership and sets the council
+    ///         tombstone so the whitelister path cannot silently re-admit them.
     function _blacklistAddress(LibAppStorage.StorageLayout storage s, address _user) internal {
         s.isWhitelisted[_user] = false;
+        s.s_blacklisted[_user] = true;
+    }
+
+    /// @notice Clears the council blacklist tombstone for `_user` (council-only at the
+    ///         facet). Does NOT re-whitelist — re-admission is a separate, deliberate
+    ///         `whitelistAddress` call.
+    function _unblacklistAddress(LibAppStorage.StorageLayout storage s, address _user) internal {
+        s.s_blacklisted[_user] = false;
+    }
+
+    /// @notice Returns whether `_user` carries the council blacklist tombstone.
+    function _isBlacklisted(LibAppStorage.StorageLayout storage s, address _user) internal view returns (bool) {
+        return s.s_blacklisted[_user];
     }
 
     /// @notice Grants or revokes the delegated whitelister capability for `_user`.
