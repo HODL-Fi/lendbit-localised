@@ -11,12 +11,14 @@ import "../models/Error.sol";
 import "../models/Event.sol";
 
 import {LibPositionManager} from "./LibPositionManager.sol";
+import {LibGlobalPool} from "./LibGlobalPool.sol";
 
 import {TokenVault} from "../TokenVault.sol";
 
 /// @title LibVaultManager — per-token vault lifecycle, deposits, and configuration
 library LibVaultManager {
     using LibPositionManager for LibAppStorage.StorageLayout;
+    using LibGlobalPool for LibAppStorage.StorageLayout;
     using SafeERC20 for IERC20;
 
     /// @notice Deposit a supported token into its vault on behalf of a user, minting
@@ -64,7 +66,14 @@ library LibVaultManager {
         // cap above real liquid assets (#4).
         _tokenI.forceApprove(address(_tokenVault), _received);
         uint256 _vaultBefore = _tokenI.balanceOf(address(_tokenVault));
-        shares = _tokenVault.deposit(_received, _from);
+
+        if (s.s_globalPoolState[_token].lastUpdatedTimestamp > 0) {
+            uint256 _unifiedShares = s.convertToShares(_token, _received);
+            shares = _tokenVault.depositWithShares(_received, _unifiedShares, _from);
+        } else {
+            shares = _tokenVault.deposit(_received, _from);
+        }
+
         uint256 _vaultReceived = _tokenI.balanceOf(address(_tokenVault)) - _vaultBefore;
 
         _config.totalDeposits += _vaultReceived;
@@ -111,7 +120,13 @@ library LibVaultManager {
         uint256 _supplyBefore = _tokenVault.totalSupply();
         uint256 _depositsBefore = _config.totalDeposits;
 
-        uint256 _shares = _tokenVault.withdraw(_amount, _to, msg.sender);
+        uint256 _shares;
+        if (s.s_globalPoolState[_token].lastUpdatedTimestamp > 0) {
+            _shares = s.convertToShares(_token, _amount);
+            _tokenVault.withdrawWithShares(_amount, _shares, _to, msg.sender);
+        } else {
+            _shares = _tokenVault.withdraw(_amount, _to, msg.sender);
+        }
 
         // Decrement the deposit base by the PRINCIPAL portion only — proportional
         // to the shares burned, not the interest-inclusive asset amount paid out.

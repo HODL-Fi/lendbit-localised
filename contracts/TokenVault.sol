@@ -123,12 +123,7 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         address _diamond,
         uint16 _interestRate,
         uint16 _reserveFactor
-    )
-        ERC4626(IERC20(_asset))
-        ERC20(_name, _symbol)
-        addressZeroCheck(_asset)
-        addressZeroCheck(_diamond)
-    {
+    ) ERC4626(IERC20(_asset)) ERC20(_name, _symbol) addressZeroCheck(_asset) addressZeroCheck(_diamond) {
         // Defence-in-depth: reject an out-of-range reserve factor at construction,
         // mirroring `setReserveFactor`. A value above 100% makes `_pendingInterest`
         // underflow (`BASIS_POINTS_SCALE_256 - reserveFactor`) and is unrecoverable
@@ -226,6 +221,36 @@ contract TokenVault is ERC4626, ReentrancyGuard {
     }
 
     /**
+     * @notice Deposit ERC20 assets into the vault with explicit share amount (for unified cross-chain LP accounting)
+     * @param assets Amount of assets to deposit
+     * @param shares Amount of shares to mint
+     * @param receiver Address receiving the shares
+     * @return Amount of shares minted
+     */
+    function depositWithShares(uint256 assets, uint256 shares, address receiver)
+        external
+        nonReentrant
+        onlyDiamond
+        notPaused
+        addressZeroCheck(receiver)
+        validAmount(assets)
+        returns (uint256)
+    {
+        if (shares == 0) revert InvalidAmount();
+        _accrueInterest();
+
+        uint256 _balBefore = IERC20(asset()).balanceOf(address(this));
+        IERC20(asset()).safeTransferFrom(msg.sender, address(this), assets);
+        uint256 _received = IERC20(asset()).balanceOf(address(this)) - _balBefore;
+        if (_received == 0) revert InvalidAmount();
+
+        _mint(receiver, shares);
+
+        emit Deposit(msg.sender, receiver, _received, shares);
+        return shares;
+    }
+
+    /**
      * @notice Withdraw ERC20 assets from the vault
      * @param assets Amount of assets to withdraw
      * @param receiver Address receiving the assets
@@ -271,6 +296,39 @@ contract TokenVault is ERC4626, ReentrancyGuard {
         _burn(owner, shares);
 
         // Transfer assets to receiver
+        IERC20(asset()).safeTransfer(receiver, assets);
+
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+        return shares;
+    }
+
+    /**
+     * @notice Withdraw ERC20 assets from the vault with explicit share amount (for unified cross-chain LP accounting)
+     * @param assets Amount of assets to withdraw
+     * @param shares Amount of shares to burn
+     * @param receiver Address receiving the assets
+     * @param owner Owner of the shares
+     * @return Amount of shares burned
+     */
+    function withdrawWithShares(uint256 assets, uint256 shares, address receiver, address owner)
+        external
+        nonReentrant
+        onlyDiamond
+        addressZeroCheck(receiver)
+        addressZeroCheck(owner)
+        validAmount(assets)
+        returns (uint256)
+    {
+        _accrueInterest();
+        if (shares == 0) revert InvalidAmount();
+        if (balanceOf(owner) < shares) revert InsufficientShares();
+
+        uint256 _balance = IERC20(asset()).balanceOf(address(this));
+        if (_balance - totalProtocolReserve < assets) {
+            revert InsufficientBalance();
+        }
+
+        _burn(owner, shares);
         IERC20(asset()).safeTransfer(receiver, assets);
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
@@ -382,8 +440,7 @@ contract TokenVault is ERC4626, ReentrancyGuard {
                 fixedRateProduct = 0;
             } else {
                 fixedBorrows = fixedBorrows - principalRepaid;
-                fixedRateProduct =
-                    _productReduction >= fixedRateProduct ? 0 : fixedRateProduct - _productReduction;
+                fixedRateProduct = _productReduction >= fixedRateProduct ? 0 : fixedRateProduct - _productReduction;
             }
         }
 
@@ -468,12 +525,7 @@ contract TokenVault is ERC4626, ReentrancyGuard {
     /// @notice Transfer realized protocol reserve out of the vault (only diamond).
     /// @param to Address receiving the withdrawn reserve.
     /// @param amount Amount of reserve to withdraw; reverts if it exceeds `totalProtocolReserve`.
-    function withdrawReserve(address to, uint256 amount)
-        external
-        onlyDiamond
-        addressZeroCheck(to)
-        validAmount(amount)
-    {
+    function withdrawReserve(address to, uint256 amount) external onlyDiamond addressZeroCheck(to) validAmount(amount) {
         if (amount > totalProtocolReserve) revert InvalidAmount();
         totalProtocolReserve = totalProtocolReserve - amount;
         IERC20(asset()).safeTransfer(to, amount);

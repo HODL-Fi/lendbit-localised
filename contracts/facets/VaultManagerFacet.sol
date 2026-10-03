@@ -5,13 +5,16 @@ import {LibAppStorage} from "../libraries/LibAppStorage.sol";
 import {LibVaultManager} from "../libraries/LibVaultManager.sol";
 import {LibDiamond} from "../libraries/LibDiamond.sol";
 
+import {LibGlobalPool} from "../libraries/LibGlobalPool.sol";
 import {VaultConfiguration} from "../models/Protocol.sol";
-import {GuardianSet} from "../models/Event.sol";
+import {GuardianSet, GlobalPoolAuthoritySet} from "../models/Event.sol";
+import {ADDRESS_ZERO} from "../models/Error.sol";
 import {SecurityBase} from "../libraries/SecurityBase.sol";
 
 /// @title VaultManagerFacet — LP deposit/withdraw and security-council vault administration
 contract VaultManagerFacet is SecurityBase {
     using LibVaultManager for LibAppStorage.StorageLayout;
+    using LibGlobalPool for LibAppStorage.StorageLayout;
 
     /// @notice Deposit a supported token into its vault on behalf of the caller, crediting the amount actually received and minting vault shares; creates a position for the caller if none exists.
     /// @param _token The token to deposit
@@ -193,5 +196,76 @@ contract VaultManagerFacet is SecurityBase {
     /// @return True if the address is a guardian
     function isGuardian(address _guardian) external view returns (bool) {
         return LibAppStorage.appStorage().s_isGuardian[_guardian];
+    }
+
+    // ====== Global Pool Authority Administration (Phase 0) ======
+
+    /// @notice Set the authority key that signs global pool state reports.
+    /// @dev In Phase 0 this is a backend EOA; in Phase 2 governance rotates it to
+    ///      a decentralized oracle contract — a config change, not a redeploy.
+    ///      Reverts on `address(0)` to prevent bricking report ingestion.
+    /// @param _authority The new authority address (must be non-zero)
+    function setGlobalPoolAuthority(address _authority) external onlySecurityCouncil {
+        if (_authority == address(0)) revert ADDRESS_ZERO();
+        LibAppStorage.StorageLayout storage s = LibAppStorage.appStorage();
+        address _old = s.s_globalPoolAuthority;
+        s.s_globalPoolAuthority = _authority;
+        emit GlobalPoolAuthoritySet(_old, _authority);
+    }
+
+    /// @notice Return the current global pool authority address.
+    function getGlobalPoolAuthority() external view returns (address) {
+        return LibAppStorage.appStorage().s_globalPoolAuthority;
+    }
+
+    /// @notice Return the current replay-protection nonce for a token's authority reports.
+    /// @param _token The token to query
+    function getAuthorityNonce(address _token) external view returns (uint256) {
+        return LibAppStorage.appStorage().s_authorityNonces[_token];
+    }
+
+    /// @notice Process a signed off-chain aggregate report from the Global Pool Authority.
+    /// @param _token The token being reported
+    /// @param _globalPoolValue Total asset value across all chains
+    /// @param _globalShareSupply Total share supply across all chains
+    /// @param _nonce Single-use nonce (must equal current nonce + 1)
+    /// @param _deadline Signature expiration timestamp
+    /// @param _signature EIP-191 signature by the global pool authority
+    function updateGlobalPoolState(
+        address _token,
+        uint256 _globalPoolValue,
+        uint256 _globalShareSupply,
+        uint256 _nonce,
+        uint256 _deadline,
+        bytes calldata _signature
+    ) external {
+        LibAppStorage.appStorage().updateGlobalPoolState(
+            _token,
+            _globalPoolValue,
+            _globalShareSupply,
+            _nonce,
+            _deadline,
+            _signature
+        );
+    }
+
+    /// @notice Return the current real-time unified share price for a token (scaled 1e18).
+    /// @param _token The token to query
+    function getGlobalSharePrice(address _token) external view returns (uint256) {
+        return LibAppStorage.appStorage().getSharePrice(_token);
+    }
+
+    /// @notice Convert deposit asset amount to global shares using unified price.
+    /// @param _token The token to query
+    /// @param _assets Amount of assets
+    function convertToGlobalShares(address _token, uint256 _assets) external view returns (uint256) {
+        return LibAppStorage.appStorage().convertToShares(_token, _assets);
+    }
+
+    /// @notice Convert global shares to redeemable asset amount using unified price.
+    /// @param _token The token to query
+    /// @param _shares Amount of shares
+    function convertToGlobalAssets(address _token, uint256 _shares) external view returns (uint256) {
+        return LibAppStorage.appStorage().convertToAssets(_token, _shares);
     }
 }
