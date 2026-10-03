@@ -126,6 +126,20 @@ library LibAppStorage {
         // council clears it (`_unblacklistAddress`). Appended at the end for
         // upgrade-safe layout.
         mapping(address => bool) s_blacklisted;
+        // ── Global Pool Accounting ──────────────────────────────
+        // Per-asset global pool state for cross-chain LP unification. Stores
+        // the authority-reported aggregate baseline plus local vault snapshots.
+        // Appended at the end for upgrade-safe layout.
+        mapping(address => GlobalPoolState) s_globalPoolState;
+        // Configurable authority key that signs global state reports. 
+        // this is the backend EOA; in Phase 2 it will be swapped to a
+        // decentralized oracle contract — a config change, not a redeploy.
+        // Appended at the end for upgrade-safe layout.
+        address s_globalPoolAuthority;
+        // Per-token replay protection nonce for authority reports. Incremented
+        // on every valid `updateGlobalPoolState` call.
+        // Appended at the end for upgrade-safe layout.
+        mapping(address => uint256) s_authorityNonces;
     }
 
     bytes32 internal constant STORAGE_SLOT = keccak256("contracts.storage.LibAppStorage");

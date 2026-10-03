@@ -75,3 +75,10 @@ error POOL_TOKEN_MISMATCH(address pool, address token);
 // chainlink functions error
 error OnlyRouterCanFulfill();
 error UnexpectedRequestID(bytes32 requestId);
+
+// Global pool accounting errors
+error INVALID_GLOBAL_POOL_AUTHORITY();
+error AUTHORITY_NOT_SET();
+error EXPIRED_REPORT(uint256 deadline, uint256 timestamp);
+error INVALID_REPORT_NONCE(uint256 expected, uint256 given);
+error INCONSISTENT_LOCAL_STATE();

@@ -55,3 +55,17 @@ struct FunctionResponse {
     bytes err;
     uint256 priceData;
 }
+
+/// @notice Per-asset global pool accounting state for cross-chain LP unification.
+/// @dev The authority periodically posts absolute aggregate values (globalPoolValue,
+///      globalShareSupply) across all chains. The local contract captures a snapshot
+///      of its own vault state at that instant, then uses the delta between the
+///      snapshot and current local state to derive a real-time global pool value
+///      between authority updates.
+struct GlobalPoolState {
+    uint256 globalPoolValue;      // Authority-reported total asset value across ALL chains
+    uint256 globalShareSupply;    // Authority-reported total LP share supply across ALL chains
+    uint256 lastUpdatedTimestamp; // Timestamp of last valid authority report
+    uint256 localSnapshotAssets;  // Local vault total assets (totalAssets()) at report time
+    uint256 localSnapshotShares;  // Local vault share supply (totalSupply()) at report time
+}

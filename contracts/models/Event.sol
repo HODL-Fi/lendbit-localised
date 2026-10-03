@@ -91,3 +91,13 @@ event BaseRateSet(address indexed token, uint16 baseRate);
 event SlopeRateSet(address indexed token, uint16 slopeRate);
 event OptimalUtilizationSet(address indexed token, uint16 optimalUtilization);
 event LiquidationBonusSet(address indexed token, uint16 liquidationBonus);
+
+// Global pool accounting events
+event GlobalPoolAuthoritySet(address indexed oldAuthority, address indexed newAuthority);
+event GlobalPoolStateUpdated(
+    address indexed token,
+    uint256 globalPoolValue,
+    uint256 globalShareSupply,
+    uint256 nonce,
+    uint256 timestamp
+);
